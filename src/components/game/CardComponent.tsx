@@ -10,7 +10,7 @@ interface CardComponentProps {
   isDisabled?: boolean;
   onClick?: () => void;
   dealDelay?: number;    // Staggered deal animation delay (ms)
-  size?: 'sm' | 'md' | 'lg';
+  size?: 'xs' | 'sm' | 'md' | 'lg';
 }
 
 const RANK_DISPLAY: Record<number, string> = {
@@ -32,6 +32,7 @@ export default function CardComponent({
   const rankDisplay = RANK_DISPLAY[card.rank] || String(card.rank);
 
   const sizeStyles = {
+    xs: { width: 48, height: 72, fontSize: '0.6rem', hanjaSize: '1rem', rankSize: '0.75rem' },
     sm: { width: 60, height: 90, fontSize: '0.75rem', hanjaSize: '1.2rem', rankSize: '0.9rem' },
     md: { width: 80, height: 120, fontSize: '0.85rem', hanjaSize: '1.6rem', rankSize: '1.1rem' },
     lg: { width: 100, height: 150, fontSize: '1rem', hanjaSize: '2rem', rankSize: '1.4rem' },
@@ -88,15 +89,37 @@ export default function CardComponent({
             {suitInfo.label}
           </div>
 
-          {/* Selection indicator */}
+          {/* Selection indicator — strong visual overlay */}
           {isSelected && (
-            <div
-              className="absolute inset-0 rounded-md pointer-events-none"
-              style={{
-                borderRadius: 'var(--card-radius)',
-                boxShadow: `inset 0 0 0 2px var(--tujeon-gold), 0 0 20px rgba(200,169,110,0.4)`,
-              }}
-            />
+            <>
+              {/* Glow border overlay */}
+              <div
+                className="absolute inset-0 pointer-events-none"
+                style={{
+                  borderRadius: 'var(--card-radius)',
+                  boxShadow: `inset 0 0 0 3px var(--tujeon-gold), 0 0 24px rgba(200,169,110,0.5), 0 0 48px rgba(200,169,110,0.2)`,
+                }}
+              />
+              {/* Gold tint overlay */}
+              <div
+                className="absolute inset-0 pointer-events-none"
+                style={{
+                  borderRadius: 'var(--card-radius)',
+                  background: 'rgba(200, 169, 110, 0.15)',
+                }}
+              />
+              {/* Selection checkmark badge */}
+              <div
+                className="absolute -top-1.5 -right-1.5 w-5 h-5 sm:w-6 sm:h-6 rounded-full flex items-center justify-center text-[10px] sm:text-xs font-bold z-10"
+                style={{
+                  background: 'linear-gradient(135deg, var(--tujeon-gold), var(--tujeon-gold-dim))',
+                  color: 'var(--tujeon-black)',
+                  boxShadow: '0 2px 8px rgba(200,169,110,0.5)',
+                }}
+              >
+                ✓
+              </div>
+            </>
           )}
         </div>
 

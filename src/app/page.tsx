@@ -2,16 +2,23 @@
 
 import React, { useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import dynamic from 'next/dynamic';
 import { useGameStore } from '@/logic/useGameStore';
 import { GAME_MODE_INFO, GameMode } from '@/types/game';
 import Button from '@/components/ui/Button';
 import TutorialModal from '@/components/game/TutorialModal';
+
+const MultiplayLobby = dynamic(() => import('@/components/multiplayer/MultiplayLobby'), {
+  ssr: false,
+});
 
 export default function Home() {
   const router = useRouter();
   const initGame = useGameStore((s) => s.initGame);
   const [showTutorial, setShowTutorial] = useState(false);
   const [selectedMode, setSelectedMode] = useState<GameMode>('DOLRYEO_DAEGI');
+  const [showMultiplay, setShowMultiplay] = useState(false);
+
   const handleStartGame = useCallback(async () => {
     if (selectedMode === 'GAGU') {
       const { useGaguStore } = await import('@/logic/useGaguStore');
@@ -25,8 +32,14 @@ export default function Home() {
     router.push(`/game?mode=${selectedMode}`);
   }, [initGame, selectedMode, router]);
 
+  // ── Show multiplay lobby ──
+  if (showMultiplay) {
+    return <MultiplayLobby onBack={() => setShowMultiplay(false)} />;
+  }
+
   return (
-    <main className="min-h-screen flex flex-col items-center justify-center relative overflow-hidden">
+    <main className="min-h-[100dvh] flex flex-col items-center justify-center relative overflow-hidden">
+
       {/* ── Ambient Background ── */}
       <div
         className="absolute inset-0 pointer-events-none"
@@ -40,8 +53,8 @@ export default function Home() {
         }}
       />
 
-      {/* ── Floating card decorations ── */}
-      <div className="absolute inset-0 pointer-events-none overflow-hidden">
+      {/* ── Floating card decorations (hidden on mobile for perf) ── */}
+      <div className="absolute inset-0 pointer-events-none overflow-hidden hidden sm:block">
         {[
           { top: '10%', left: '8%', rotate: '-15deg', opacity: 0.06 },
           { top: '20%', right: '12%', rotate: '20deg', opacity: 0.05 },
@@ -62,11 +75,11 @@ export default function Home() {
       </div>
 
       {/* ── Content ── */}
-      <div className="relative z-10 flex flex-col items-center gap-10 px-4">
+      <div className="relative z-10 flex flex-col items-center gap-6 sm:gap-10 px-4 w-full max-w-md">
         {/* Title */}
         <div className="text-center anim-fade-up">
           <h1
-            className="text-8xl font-black mb-3 tracking-tight"
+            className="text-5xl sm:text-8xl font-black mb-2 sm:mb-3 tracking-tight"
             style={{
               fontFamily: 'var(--font-serif)',
               background: 'linear-gradient(135deg, var(--tujeon-gold-light) 0%, var(--tujeon-gold) 40%, var(--tujeon-gold-dim) 100%)',
@@ -78,7 +91,7 @@ export default function Home() {
             투전
           </h1>
           <p
-            className="text-lg tracking-[0.3em] uppercase"
+            className="text-xs sm:text-lg tracking-[0.2em] sm:tracking-[0.3em] uppercase"
             style={{
               fontFamily: 'var(--font-serif)',
               color: 'var(--tujeon-cream-dim)',
@@ -87,21 +100,21 @@ export default function Home() {
             朝鮮 傳統 카드 遊戱
           </p>
           <div
-            className="mt-2 anim-shimmer h-[1px] w-48 mx-auto"
+            className="mt-2 anim-shimmer h-[1px] w-32 sm:w-48 mx-auto"
             style={{ background: 'linear-gradient(90deg, transparent, var(--tujeon-gold-dim), transparent)' }}
           />
         </div>
 
         {/* Game Mode Selection */}
-        <div className="flex flex-col gap-3 w-full max-w-sm" style={{ animationDelay: '0.2s' }}>
+        <div className="flex flex-col gap-2.5 sm:gap-3 w-full" style={{ animationDelay: '0.2s' }}>
           {(Object.entries(GAME_MODE_INFO) as [GameMode, typeof GAME_MODE_INFO[GameMode]][]).map(
             ([mode, info]) => (
               <button
                 key={mode}
                 disabled={!info.available}
-                className={`glass-panel p-4 text-left transition-all ${
+                className={`glass-panel p-3 sm:p-4 text-left transition-all ${
                   info.available
-                    ? 'hover:bg-white/5 cursor-pointer'
+                    ? 'hover:bg-white/5 cursor-pointer active:scale-[0.98]'
                     : 'opacity-30 cursor-not-allowed'
                 } ${mode === selectedMode ? 'ring-1 ring-yellow-600/40' : ''}`}
                 onClick={() => {
@@ -112,14 +125,14 @@ export default function Home() {
               >
                 <div className="flex items-center justify-between">
                   <span
-                    className="text-lg font-bold"
+                    className="text-base sm:text-lg font-bold"
                     style={{ fontFamily: 'var(--font-serif)', color: 'var(--tujeon-gold-light)' }}
                   >
                     {info.label}
                   </span>
                   {!info.available && (
                     <span
-                      className="text-xs px-2 py-0.5 rounded-full"
+                      className="text-[10px] sm:text-xs px-2 py-0.5 rounded-full"
                       style={{
                         background: 'rgba(200,169,110,0.1)',
                         color: 'var(--tujeon-gold-dim)',
@@ -130,7 +143,7 @@ export default function Home() {
                     </span>
                   )}
                 </div>
-                <p className="text-sm mt-1" style={{ color: 'var(--tujeon-cream-dim)' }}>
+                <p className="text-xs sm:text-sm mt-0.5 sm:mt-1" style={{ color: 'var(--tujeon-cream-dim)' }}>
                   {info.description}
                 </p>
               </button>
@@ -139,9 +152,12 @@ export default function Home() {
         </div>
 
         {/* Action Buttons */}
-        <div className="flex flex-col items-center gap-3 anim-fade-up" style={{ animationDelay: '0.4s' }}>
-          <Button size="lg" onClick={handleStartGame}>
-            게임 시작
+        <div className="flex flex-col items-center gap-2.5 sm:gap-3 anim-fade-up w-full" style={{ animationDelay: '0.4s' }}>
+          <Button size="lg" onClick={handleStartGame} className="w-full sm:w-auto">
+            혼자 플레이 (봇 대전)
+          </Button>
+          <Button size="lg" variant="secondary" onClick={() => setShowMultiplay(true)} className="w-full sm:w-auto">
+            🌐 멀티플레이
           </Button>
           <Button variant="secondary" size="sm" onClick={() => setShowTutorial(true)}>
             게임 방법 보기
@@ -150,7 +166,7 @@ export default function Home() {
 
         {/* Footer */}
         <p
-          className="text-xs mt-8 opacity-40"
+          className="text-[10px] sm:text-xs mt-4 sm:mt-8 opacity-40"
           style={{ fontFamily: 'var(--font-serif)' }}
         >
           © 투전 — 조선 후기 전통 카드 놀이를 현대적으로 재해석

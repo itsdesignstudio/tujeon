@@ -10,7 +10,7 @@ interface CardHandProps {
   isFaceUp?: boolean;
   isInteractive?: boolean;
   onCardClick?: (cardId: string) => void;
-  size?: 'sm' | 'md' | 'lg';
+  size?: 'xs' | 'sm' | 'md' | 'lg';
 }
 
 export default function CardHand({
@@ -31,28 +31,33 @@ export default function CardHand({
   const isValidCombination = selectedCardIds.length === 3 && selectedSum % 10 === 0;
   const hasThreeSelected = selectedCardIds.length === 3;
 
+  // Use overlap layout when there are many cards
+  const useOverlap = cards.length > 5;
+
   return (
-    <div className="flex flex-col items-center gap-3">
-      {/* Cards */}
-      <div className="flex items-end justify-center gap-2">
-        {cards.map((card, idx) => (
-          <CardComponent
-            key={card.id}
-            card={card}
-            isFaceUp={isFaceUp}
-            isSelected={selectedCardIds.includes(card.id)}
-            isDisabled={!isInteractive}
-            onClick={() => onCardClick?.(card.id)}
-            dealDelay={idx * 100}
-            size={size}
-          />
-        ))}
+    <div className="flex flex-col items-center gap-2 sm:gap-3 w-full">
+      {/* Cards — scroll container for overlap, flex for normal */}
+      <div className={useOverlap ? 'card-hand-scroll w-full' : 'flex items-end justify-center'}>
+        <div className={useOverlap ? 'card-hand-overlap' : 'flex items-end justify-center gap-1 sm:gap-2'}>
+          {cards.map((card, idx) => (
+            <CardComponent
+              key={card.id}
+              card={card}
+              isFaceUp={isFaceUp}
+              isSelected={selectedCardIds.includes(card.id)}
+              isDisabled={!isInteractive}
+              onClick={() => onCardClick?.(card.id)}
+              dealDelay={idx * (useOverlap ? 30 : 100)}
+              size={size}
+            />
+          ))}
+        </div>
       </div>
 
       {/* Selection status indicator (only for interactive hands) */}
       {isInteractive && isFaceUp && selectedCardIds.length > 0 && (
         <div
-          className="anim-fade-up text-sm px-4 py-1.5 rounded-full"
+          className="anim-fade-up text-xs sm:text-sm px-3 sm:px-4 py-1 sm:py-1.5 rounded-full"
           style={{
             fontFamily: 'var(--font-serif)',
             background: isValidCombination

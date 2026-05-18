@@ -11,6 +11,10 @@ interface PlayerSlotProps {
   isInteractive?: boolean;
   onCardClick?: (cardId: string) => void;
   position?: 'top' | 'bottom';
+  hideScore?: boolean;
+  hideJokbo?: boolean;
+  /** Multiplay mode: show only card backs based on count */
+  cardCount?: number;
 }
 
 export default function PlayerSlot({
@@ -20,20 +24,26 @@ export default function PlayerSlot({
   isInteractive = false,
   onCardClick,
   position = 'bottom',
+  hideScore = false,
+  hideJokbo = false,
+  cardCount,
 }: PlayerSlotProps) {
+  // In multiplay, if we have no card data but know cardCount, show dummy backs
+  const showDummyBacks = cardCount !== undefined && player.cards.length === 0 && cardCount > 0;
+
   return (
     <div
-      className={`flex flex-col items-center gap-3 ${position === 'top' ? 'flex-col-reverse' : ''}`}
+      className={`flex flex-col items-center gap-2 sm:gap-3 ${position === 'top' ? 'flex-col-reverse' : ''}`}
     >
       {/* Player info bar */}
       <div
-        className={`glass-panel flex items-center gap-4 px-5 py-3 ${
+        className={`glass-panel flex items-center gap-2 sm:gap-4 px-3 sm:px-5 py-2 sm:py-3 ${
           isCurrentPlayer ? 'anim-pulse-glow' : ''
         }`}
       >
         {/* Avatar / Indicator */}
         <div
-          className="w-10 h-10 rounded-full flex items-center justify-center text-lg font-bold"
+          className="w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center text-sm sm:text-lg font-bold shrink-0"
           style={{
             fontFamily: 'var(--font-serif)',
             background: player.isBot
@@ -46,32 +56,34 @@ export default function PlayerSlot({
         </div>
 
         {/* Name + Status */}
-        <div className="flex flex-col">
+        <div className="flex flex-col min-w-0">
           <span
-            className="font-bold text-base"
+            className="font-bold text-sm sm:text-base truncate"
             style={{ fontFamily: 'var(--font-serif)', color: 'var(--tujeon-cream)' }}
           >
             {player.name}
           </span>
-          <span className="text-xs" style={{ color: 'var(--tujeon-cream-dim)' }}>
+          <span className="text-[10px] sm:text-xs" style={{ color: 'var(--tujeon-cream-dim)' }}>
             {player.isFolded ? '폴드' : player.evaluation ? '준비 완료' : '대기 중'}
           </span>
         </div>
 
         {/* Score */}
-        <div
-          className="ml-auto flex flex-col items-end"
-        >
-          <span
-            className="font-bold text-lg tabular-nums"
-            style={{ color: 'var(--tujeon-gold-light)' }}
+        {!hideScore && (
+          <div
+            className="ml-auto flex flex-col items-end"
           >
-            {player.score.toLocaleString()}
-          </span>
-          <span className="text-[10px] uppercase tracking-wider" style={{ color: 'var(--tujeon-gold-dim)' }}>
-            칩
-          </span>
-        </div>
+            <span
+              className="font-bold text-base sm:text-lg tabular-nums"
+              style={{ color: 'var(--tujeon-gold-light)' }}
+            >
+              {player.score.toLocaleString()}
+            </span>
+            <span className="text-[10px] uppercase tracking-wider" style={{ color: 'var(--tujeon-gold-dim)' }}>
+              칩
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Cards */}
@@ -86,8 +98,28 @@ export default function PlayerSlot({
         />
       )}
 
+      {/* Dummy card backs for multiplay (no card data, but known count) */}
+      {showDummyBacks && (
+        <div className="flex gap-1">
+          {Array.from({ length: cardCount }).map((_, i) => (
+            <div
+              key={i}
+              className="rounded-md"
+              style={{
+                width: position === 'top' ? 40 : 48,
+                height: position === 'top' ? 60 : 72,
+                background: `repeating-conic-gradient(var(--tujeon-red) 0% 25%, var(--tujeon-blue) 25% 50%) 50% / 14px 14px`,
+                border: '2px solid var(--tujeon-gold-dim)',
+                borderRadius: 'var(--card-radius)',
+                boxShadow: 'var(--shadow-card)',
+              }}
+            />
+          ))}
+        </div>
+      )}
+
       {/* Evaluation result (shown during SHOWDOWN/RESULT) */}
-      {player.evaluation && showCards && (
+      {!hideJokbo && player.evaluation && showCards && (
         <div className="anim-scale-in">
           <div
             className={`jokbo-badge ${getJokboBadgeClass(

@@ -2,6 +2,7 @@
 
 import React, { useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import dynamic from 'next/dynamic';
 import { useGameStore } from '@/logic/useGameStore';
 import { useGaguStore } from '@/logic/useGaguStore';
 import { useSutujeonStore } from '@/logic/useSutujeonStore';
@@ -9,14 +10,26 @@ import GameBoard from '@/components/game/GameBoard';
 import GaguBoard from '@/components/game/GaguBoard';
 import SutujeonBoard from '@/components/game/SutujeonBoard';
 
+const MultiplayGameWrapper = dynamic(() => import('@/components/multiplayer/MultiplayGameWrapper'), {
+  ssr: false,
+});
+
 function GameContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const mode = searchParams.get('mode') || 'DOLRYEO_DAEGI';
+  const isMultiplay = searchParams.get('multiplay') === 'true';
 
   const { players, gamePhase, dealCards, initGame } = useGameStore();
   const { player: gaguPlayer, gamePhase: gaguPhase, dealCards: gaguDealCards, initGagu } = useGaguStore();
   const { players: sutujeonPlayers, gamePhase: sutujeonPhase, dealCards: sutujeonDealCards, initSutujeon } = useSutujeonStore();
+
+  // ── Multiplay Mode ──
+  if (isMultiplay) {
+    return <MultiplayGameWrapper mode={mode} />;
+  }
+
+  // ── Local Mode (existing logic, unchanged) ──
 
   useEffect(() => {
     if (mode === 'GAGU') {
@@ -37,7 +50,6 @@ function GameContent() {
   // Auto-deal when entering from lobby
   useEffect(() => {
     if (mode === 'GAGU') {
-      // Allow dealCards when phase is INIT (player will be null initially)
       if (gaguPhase === 'INIT') {
         const timer = setTimeout(() => {
           gaguDealCards();
@@ -86,10 +98,10 @@ function GameContent() {
   const BackButton = (
     <button
       onClick={handleGoHome}
-      className="absolute top-4 left-4 z-50 px-4 py-2 rounded-full glass-panel flex items-center gap-2 hover:bg-white/10 transition-colors"
+      className="absolute top-3 left-3 sm:top-4 sm:left-4 z-50 px-3 sm:px-4 py-1.5 sm:py-2 rounded-full glass-panel flex items-center gap-1.5 sm:gap-2 hover:bg-white/10 transition-colors text-xs sm:text-sm"
       style={{ color: 'var(--tujeon-cream-dim)', fontFamily: 'var(--font-serif)' }}
     >
-      <span className="text-lg">←</span>
+      <span className="text-sm sm:text-lg">←</span>
       <span>홈으로</span>
     </button>
   );
@@ -97,8 +109,8 @@ function GameContent() {
   if (mode === 'GAGU') {
     if (!gaguPlayer) {
       return (
-        <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--tujeon-bg-deep)' }}>
-          <div className="text-2xl font-bold anim-fade-up" style={{ fontFamily: 'var(--font-serif)', color: 'var(--tujeon-gold)' }}>
+        <div className="min-h-[100dvh] flex items-center justify-center" style={{ background: 'var(--tujeon-bg-deep)' }}>
+          <div className="text-lg sm:text-2xl font-bold anim-fade-up" style={{ fontFamily: 'var(--font-serif)', color: 'var(--tujeon-gold)' }}>
             가구 준비 중...
           </div>
         </div>
@@ -115,8 +127,8 @@ function GameContent() {
   if (mode === 'SUTUJEON') {
     if (sutujeonPlayers.length === 0) {
       return (
-        <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--tujeon-bg-deep)' }}>
-          <div className="text-2xl font-bold anim-fade-up" style={{ fontFamily: 'var(--font-serif)', color: 'var(--tujeon-gold)' }}>
+        <div className="min-h-[100dvh] flex items-center justify-center" style={{ background: 'var(--tujeon-bg-deep)' }}>
+          <div className="text-lg sm:text-2xl font-bold anim-fade-up" style={{ fontFamily: 'var(--font-serif)', color: 'var(--tujeon-gold)' }}>
             수투전 준비 중...
           </div>
         </div>
@@ -132,8 +144,8 @@ function GameContent() {
 
   if (players.length === 0) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--tujeon-bg-deep)' }}>
-        <div className="text-2xl font-bold anim-fade-up" style={{ fontFamily: 'var(--font-serif)', color: 'var(--tujeon-gold)' }}>
+      <div className="min-h-[100dvh] flex items-center justify-center" style={{ background: 'var(--tujeon-bg-deep)' }}>
+        <div className="text-lg sm:text-2xl font-bold anim-fade-up" style={{ fontFamily: 'var(--font-serif)', color: 'var(--tujeon-gold)' }}>
           투전 준비 중...
         </div>
       </div>
@@ -150,8 +162,9 @@ function GameContent() {
 
 export default function GamePage() {
   return (
-    <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-black text-white">로딩 중...</div>}>
+    <Suspense fallback={<div className="min-h-[100dvh] flex items-center justify-center bg-black text-white">로딩 중...</div>}>
       <GameContent />
     </Suspense>
   );
 }
+
