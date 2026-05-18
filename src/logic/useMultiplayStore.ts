@@ -82,8 +82,19 @@ export const useMultiplayStore = create<MultiplayState>((set, get) => ({
     }
 
     const db = getFirebaseDb();
-    const roomRef = push(ref(db, 'rooms'));
-    const newRoomId = roomRef.key!;
+    
+    // Generate a 6-character short code
+    const generateShortCode = () => {
+      const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+      let code = '';
+      for (let i = 0; i < 6; i++) {
+        code += chars.charAt(Math.floor(Math.random() * chars.length));
+      }
+      return code;
+    };
+    
+    const newRoomId = generateShortCode();
+    const roomRef = ref(db, `rooms/${newRoomId}`);
 
     const initialRoomData = {
       config,

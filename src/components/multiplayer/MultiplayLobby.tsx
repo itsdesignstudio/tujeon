@@ -6,6 +6,7 @@ import { useMultiplayStore, RoomConfig } from '@/logic/useMultiplayStore';
 import { GAME_MODE_INFO, GameMode } from '@/types/game';
 import Button from '@/components/ui/Button';
 import PlayerList from './PlayerList';
+import { getErrorMessage } from '@/lib/error';
 
 type LobbyStep = 'MENU' | 'CREATE' | 'JOIN' | 'WAITING';
 
@@ -53,7 +54,7 @@ export default function MultiplayLobby({ onBack }: MultiplayLobbyProps = {}) {
       await createRoom(config, playerName.trim());
       setStep('WAITING');
     } catch (e: any) {
-      setError(e.message || '방 생성에 실패했습니다.');
+      setError(getErrorMessage(e, '방 생성에 실패했습니다.'));
     } finally {
       setLoading(false);
     }
@@ -72,10 +73,11 @@ export default function MultiplayLobby({ onBack }: MultiplayLobbyProps = {}) {
     setLoading(true);
     setError('');
     try {
-      await joinRoom(joinCode.trim(), playerName.trim());
+      const formattedCode = joinCode.trim().toUpperCase();
+      await joinRoom(formattedCode, playerName.trim());
       setStep('WAITING');
     } catch (e: any) {
-      setError(e.message || '방 입장에 실패했습니다.');
+      setError(getErrorMessage(e, '방 입장에 실패했습니다.'));
     } finally {
       setLoading(false);
     }
@@ -248,9 +250,10 @@ export default function MultiplayLobby({ onBack }: MultiplayLobbyProps = {}) {
               <input
                 type="text"
                 value={joinCode}
-                onChange={(e) => setJoinCode(e.target.value)}
+                onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
                 placeholder="방 코드를 입력하세요"
-                className="glass-panel px-4 py-3 text-sm bg-transparent outline-none font-mono tracking-widest"
+                maxLength={6}
+                className="glass-panel px-4 py-3 text-sm bg-transparent outline-none font-mono tracking-widest uppercase"
                 style={{ color: 'var(--tujeon-cream)', borderColor: 'rgba(200,169,110,0.2)' }}
               />
             </div>
@@ -282,7 +285,7 @@ export default function MultiplayLobby({ onBack }: MultiplayLobbyProps = {}) {
                 className="text-2xl sm:text-3xl font-mono font-bold tracking-[0.3em] select-all"
                 style={{ color: 'var(--tujeon-gold-light)' }}
               >
-                {roomId?.slice(-8).toUpperCase() || '---'}
+                {roomId || '---'}
               </div>
               <div className="text-[10px] mt-1.5" style={{ color: 'var(--tujeon-cream-dim)' }}>
                 이 코드를 상대방에게 전달하세요
