@@ -19,7 +19,6 @@ export default function SutujeonBoard() {
     leadPlayerIndex,
     totalTricksPlayed,
     playCard,
-    nextRound,
     resetSutujeon,
   } = useSutujeonStore();
 

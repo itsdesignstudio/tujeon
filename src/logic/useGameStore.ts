@@ -36,7 +36,7 @@ function createPlayer(
 
 const INITIAL_STATE: Omit<GameState, 
   'initGame' | 'dealCards' | 'toggleCardSelection' | 'confirmCombination' | 
-  'evaluateHands' | 'nextRound' | 'resetGame'
+  'evaluateHands' | 'declareHwang' | 'nextRound' | 'resetGame'
 > = {
   gameMode: 'DOLRYEO_DAEGI',
   deck: [],
