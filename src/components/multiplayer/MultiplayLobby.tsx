@@ -9,7 +9,7 @@ import Button from '@/components/ui/Button';
 import PlayerList from './PlayerList';
 import { getErrorMessage } from '@/lib/error';
 
-type LobbyStep = 'MENU' | 'CREATE' | 'JOIN' | 'WAITING';
+type LobbyStep = 'MENU' | 'CREATE' | 'JOIN' | 'MATCHING' | 'WAITING';
 
 interface MultiplayLobbyProps {
   onBack?: () => void;
@@ -21,12 +21,14 @@ export default function MultiplayLobby({ onBack }: MultiplayLobbyProps = {}) {
     myId,
     roomId,
     isHost,
+    isMatchmaking,
     roomConfig,
     gameState,
     publicPlayers,
     login,
     createRoom,
     joinRoom,
+    findMatch,
     leaveRoom,
     dealCardsToPlayers,
     updateGameState,
@@ -130,6 +132,23 @@ export default function MultiplayLobby({ onBack }: MultiplayLobbyProps = {}) {
     setError('');
   }, [leaveRoom]);
 
+  // ── Quick Match ──
+  const handleQuickMatch = useCallback(async () => {
+    const finalName = playerName.trim() || '익명의 투전자';
+    setLoading(true);
+    setError('');
+    setStep('MATCHING');
+    try {
+      await findMatch(selectedMode, finalName);
+      setStep('WAITING');
+    } catch (e: any) {
+      setError(getErrorMessage(e, '매칭에 실패했습니다.'));
+      setStep('MENU');
+    } finally {
+      setLoading(false);
+    }
+  }, [playerName, selectedMode, findMatch]);
+
   const playerCount = Object.keys(publicPlayers).length;
 
   // ── Navigate to game if phase changes away from LOBBY ──
@@ -181,11 +200,59 @@ export default function MultiplayLobby({ onBack }: MultiplayLobbyProps = {}) {
         {/* ── MENU Step ── */}
         {step === 'MENU' && (
           <div className="flex flex-col gap-3 w-full anim-fade-up">
-            <Button size="lg" onClick={() => setStep('CREATE')} className="w-full">
+
+            {/* ── Quick Match Section ── */}
+            <div className="glass-panel p-4 flex flex-col gap-3">
+              <div className="text-xs font-bold" style={{ color: 'var(--tujeon-gold-dim)', fontFamily: 'var(--font-serif)' }}>
+                닉네임 (선택)
+              </div>
+              <input
+                type="text"
+                value={playerName}
+                onChange={(e) => setPlayerName(e.target.value)}
+                placeholder="익명의 투전자"
+                maxLength={10}
+                className="glass-panel px-4 py-2.5 text-sm bg-transparent outline-none"
+                style={{ color: 'var(--tujeon-cream)', borderColor: 'rgba(200,169,110,0.2)' }}
+              />
+              <div className="text-xs font-bold" style={{ color: 'var(--tujeon-gold-dim)', fontFamily: 'var(--font-serif)' }}>
+                게임 모드
+              </div>
+              <div className="flex gap-2">
+                {(['DOLRYEO_DAEGI', 'GAGU', 'SUTUJEON'] as GameMode[]).map((mode) => (
+                  <button
+                    key={mode}
+                    className={`glass-panel flex-1 px-2 py-2 text-xs sm:text-sm text-center transition-all ${
+                      mode === selectedMode ? 'ring-1 ring-yellow-600/40' : 'opacity-60'
+                    }`}
+                    style={{ fontFamily: 'var(--font-serif)', color: 'var(--tujeon-gold-light)' }}
+                    onClick={() => setSelectedMode(mode)}
+                  >
+                    {GAME_MODE_INFO[mode].label}
+                  </button>
+                ))}
+              </div>
+              <Button size="lg" onClick={handleQuickMatch} className="w-full">
+                ⚡ 빠른 매칭
+              </Button>
+              <p className="text-[10px] text-center" style={{ color: 'var(--tujeon-cream-dim)' }}>
+                열린 방이 있으면 자동 입장, 없으면 새 방 생성
+              </p>
+            </div>
+
+            {/* ── Separator ── */}
+            <div className="flex items-center gap-3 my-1">
+              <div className="flex-1 h-px" style={{ background: 'rgba(200,169,110,0.15)' }} />
+              <span className="text-[10px] uppercase tracking-wider" style={{ color: 'var(--tujeon-gold-dim)' }}>또는</span>
+              <div className="flex-1 h-px" style={{ background: 'rgba(200,169,110,0.15)' }} />
+            </div>
+
+            {/* ── Manual Options ── */}
+            <Button size="md" variant="secondary" onClick={() => setStep('CREATE')} className="w-full">
               방 만들기
             </Button>
-            <Button size="lg" variant="secondary" onClick={() => setStep('JOIN')} className="w-full">
-              방 참가하기
+            <Button size="md" variant="secondary" onClick={() => setStep('JOIN')} className="w-full">
+              방 코드로 참가
             </Button>
             <button
               onClick={handleBack}
@@ -299,6 +366,60 @@ export default function MultiplayLobby({ onBack }: MultiplayLobbyProps = {}) {
                 {loading ? '입장 중...' : '참가하기'}
               </Button>
             </div>
+          </div>
+        )}
+
+        {/* ── MATCHING Step ── */}
+        {step === 'MATCHING' && (
+          <div className="flex flex-col items-center gap-6 w-full anim-fade-up py-8">
+            {/* Spinning indicator */}
+            <div className="relative w-20 h-20">
+              <div
+                className="absolute inset-0 rounded-full"
+                style={{
+                  border: '3px solid rgba(200,169,110,0.15)',
+                }}
+              />
+              <div
+                className="absolute inset-0 rounded-full animate-spin"
+                style={{
+                  border: '3px solid transparent',
+                  borderTopColor: 'var(--tujeon-gold)',
+                  animationDuration: '1s',
+                }}
+              />
+              <div className="absolute inset-0 flex items-center justify-center">
+                <span className="text-2xl">⚡</span>
+              </div>
+            </div>
+
+            <div className="text-center">
+              <div
+                className="text-lg font-bold mb-1"
+                style={{ fontFamily: 'var(--font-serif)', color: 'var(--tujeon-gold)' }}
+              >
+                매칭 중...
+              </div>
+              <p className="text-xs" style={{ color: 'var(--tujeon-cream-dim)' }}>
+                {GAME_MODE_INFO[selectedMode].label} 상대를 찾고 있습니다
+              </p>
+            </div>
+
+            {error && (
+              <div className="text-xs text-center" style={{ color: 'var(--tujeon-red-light)' }}>{error}</div>
+            )}
+
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => {
+                leaveRoom();
+                setStep('MENU');
+                setLoading(false);
+              }}
+            >
+              매칭 취소
+            </Button>
           </div>
         )}
 

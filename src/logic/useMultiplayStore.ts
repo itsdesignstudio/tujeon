@@ -48,10 +48,14 @@ export interface MultiplayState {
   publicPlayers: Record<string, RTDBPublicPlayer>;
   privateHand: Card[] | string[]; // Can be Card objects or card IDs depending on implementation
   
+  // Connection
+  isMatchmaking: boolean;
+
   // Actions
   login: () => Promise<string>;
   createRoom: (config: RoomConfig, playerName: string) => Promise<string>;
   joinRoom: (roomId: string, playerName: string) => Promise<void>;
+  findMatch: (gameMode: GameMode, playerName: string) => Promise<string>;
   leaveRoom: () => void;
   
   // Game Actions
@@ -74,6 +78,7 @@ export const useMultiplayStore = create<MultiplayState>((set, get) => ({
   myId: null,
   roomId: null,
   isHost: false,
+  isMatchmaking: false,
   
   roomConfig: null,
   gameState: null,
@@ -130,6 +135,14 @@ export const useMultiplayStore = create<MultiplayState>((set, get) => ({
 
     await firebaseSet(roomRef, initialRoomData);
     
+    // Register this room in the matchmaking queue so others can find it
+    await firebaseSet(ref(db, `matchmaking/${config.gameMode}/${newRoomId}`), {
+      hostName: playerName,
+      currentPlayers: 1,
+      maxPlayers: config.maxPlayers,
+      createdAt: Date.now(),
+    });
+    
     set({ isHost: true });
     await get().joinRoom(newRoomId, playerName);
     
@@ -151,6 +164,8 @@ export const useMultiplayStore = create<MultiplayState>((set, get) => ({
       throw new Error('Room does not exist');
     }
 
+    const config: RoomConfig = snapshot.val();
+
     // Add self to public players if not already there
     const meRef = ref(db, `rooms/${roomId}/publicPlayers/${myId}`);
     const meSnap = await firebaseGet(meRef);
@@ -167,7 +182,19 @@ export const useMultiplayStore = create<MultiplayState>((set, get) => ({
     // Automatically remove myself from publicPlayers when disconnected
     onDisconnect(meRef).remove();
 
-    set({ roomId, myId });
+    // Update matchmaking queue with new player count
+    const playersSnap = await firebaseGet(ref(db, `rooms/${roomId}/publicPlayers`));
+    const currentPlayers = playersSnap.exists() ? Object.keys(playersSnap.val()).length : 1;
+    const mmRef = ref(db, `matchmaking/${config.gameMode}/${roomId}`);
+    if (currentPlayers >= config.maxPlayers) {
+      // Room is full — remove from matchmaking
+      await firebaseRemove(mmRef);
+    } else {
+      // Update player count
+      await update(mmRef, { currentPlayers });
+    }
+
+    set({ roomId, myId, isMatchmaking: false });
 
     // Setup Listeners
     const configRef = ref(db, `rooms/${roomId}/config`);
@@ -183,8 +210,54 @@ export const useMultiplayStore = create<MultiplayState>((set, get) => ({
     onValue(myHandRef, (snap) => set({ privateHand: snap.val() || [] }));
   },
 
+  findMatch: async (gameMode, playerName) => {
+    let { myId } = get();
+    if (!myId) {
+      myId = await get().login();
+    }
+
+    set({ isMatchmaking: true });
+
+    const db = getFirebaseDb();
+    const mmRef = ref(db, `matchmaking/${gameMode}`);
+    const snapshot = await firebaseGet(mmRef);
+
+    if (snapshot.exists()) {
+      const rooms = snapshot.val() as Record<string, {
+        hostName: string;
+        currentPlayers: number;
+        maxPlayers: number;
+        createdAt: number;
+      }>;
+
+      // Find rooms that aren't full, sorted oldest first (FIFO)
+      const availableRooms = Object.entries(rooms)
+        .filter(([_, info]) => info.currentPlayers < info.maxPlayers)
+        .sort(([, a], [, b]) => a.createdAt - b.createdAt);
+
+      if (availableRooms.length > 0) {
+        // Join the oldest available room
+        const [foundRoomId] = availableRooms[0];
+        try {
+          await get().joinRoom(foundRoomId, playerName);
+          return foundRoomId;
+        } catch {
+          // Room may have been deleted/filled between query and join — fall through to create
+        }
+      }
+    }
+
+    // No available rooms found — create a new one
+    const config: RoomConfig = {
+      gameMode,
+      maxPlayers: gameMode === 'SUTUJEON' ? 4 : 2,
+    };
+    const newRoomId = await get().createRoom(config, playerName);
+    return newRoomId;
+  },
+
   leaveRoom: () => {
-    const { roomId, myId } = get();
+    const { roomId, myId, isHost, roomConfig } = get();
     if (!roomId) return;
 
     const db = getFirebaseDb();
@@ -195,6 +268,11 @@ export const useMultiplayStore = create<MultiplayState>((set, get) => ({
       firebaseRemove(ref(db, `rooms/${roomId}/privatePlayers/${myId}`));
       // Also cancel the onDisconnect since we are leaving cleanly
       onDisconnect(ref(db, `rooms/${roomId}/publicPlayers/${myId}`)).cancel();
+    }
+
+    // If host leaves, remove the room from matchmaking queue entirely
+    if (isHost && roomConfig) {
+      firebaseRemove(ref(db, `matchmaking/${roomConfig.gameMode}/${roomId}`));
     }
 
     // Remove listeners
@@ -208,6 +286,7 @@ export const useMultiplayStore = create<MultiplayState>((set, get) => ({
     set({
       roomId: null,
       isHost: false,
+      isMatchmaking: false,
       roomConfig: null,
       gameState: null,
       publicPlayers: {},
@@ -216,10 +295,16 @@ export const useMultiplayStore = create<MultiplayState>((set, get) => ({
   },
 
   dealCardsToPlayers: async ({ playersHands, deck, gaguStatus }) => {
-    const { roomId, isHost, publicPlayers } = get();
+    const { roomId, isHost, publicPlayers, roomConfig } = get();
     if (!roomId || !isHost) return;
 
     const db = getFirebaseDb();
+
+    // Game is starting — remove from matchmaking queue
+    if (roomConfig) {
+      await firebaseRemove(ref(db, `matchmaking/${roomConfig.gameMode}/${roomId}`));
+    }
+
     const updates: Record<string, any> = {};
 
     // For each player, set their private hand and update public card count
@@ -239,7 +324,6 @@ export const useMultiplayStore = create<MultiplayState>((set, get) => ({
     }
     
     // If it's Sutujeon, init trick data
-    const { roomConfig } = get();
     if (roomConfig?.gameMode === 'SUTUJEON') {
       updates[`rooms/${roomId}/gameState/sutujeonTotalTricks`] = 0;
       updates[`rooms/${roomId}/gameState/sutujeonTrickActions`] = [];
