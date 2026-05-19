@@ -222,7 +222,7 @@ export default function MultiplayLobby({ onBack }: MultiplayLobbyProps = {}) {
                 게임 모드
               </label>
               <div className="flex gap-2">
-                {(['DOLRYEO_DAEGI', 'GAGU'] as GameMode[]).map((mode) => (
+                {(['DOLRYEO_DAEGI', 'GAGU', 'SUTUJEON'] as GameMode[]).map((mode) => (
                   <button
                     key={mode}
                     className={`glass-panel flex-1 px-3 py-2.5 text-sm text-center transition-all ${

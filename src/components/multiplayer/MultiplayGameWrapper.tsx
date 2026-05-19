@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useMultiplayStore } from '@/logic/useMultiplayStore';
 import MultiplayGaguBoard from '@/components/multiplayer/MultiplayGaguBoard';
 import MultiplayGameBoard from '@/components/multiplayer/MultiplayGameBoard';
+import MultiplaySutujeonBoard from '@/components/multiplayer/MultiplaySutujeonBoard';
 
 export default function MultiplayGameWrapper({ mode }: { mode: string }) {
   const router = useRouter();
@@ -74,6 +75,16 @@ export default function MultiplayGameWrapper({ mode }: { mode: string }) {
         {PlayerLeftOverlay}
         {BackButton}
         <MultiplayGaguBoard />
+      </>
+    );
+  }
+
+  if (mode === 'SUTUJEON') {
+    return (
+      <>
+        {PlayerLeftOverlay}
+        {BackButton}
+        <MultiplaySutujeonBoard />
       </>
     );
   }

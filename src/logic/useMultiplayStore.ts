@@ -19,8 +19,10 @@ export interface RTDBGameState {
   tableCards?: Record<string, string>; // { [userId]: cardId }
   deck?: string[]; // For Gagu
   gaguStatus?: Record<string, { hasStood: boolean; score: number }>; // For Gagu
-  winnerId?: string | null; // For Gagu
+  winnerId?: string | null; // For Gagu & Sutujeon
   showdownHands?: Record<string, string[]>; // For Gagu
+  sutujeonTrickActions?: { playerId: string; cardId: string }[]; // For Sutujeon
+  sutujeonTotalTricks?: number; // For Sutujeon
 }
 
 export interface RTDBPublicPlayer {
@@ -58,6 +60,8 @@ export interface MultiplayState {
   hitGagu: () => Promise<void>;
   standGagu: () => Promise<void>;
   evaluateGaguShowdown: () => Promise<void>;
+  playCardSutujeon: (cardId: string) => Promise<void>;
+  evaluateSutujeonTrick: () => Promise<void>;
   endTurn: (nextUserId: string) => Promise<void>;
   updateGameState: (newState: Partial<RTDBGameState>) => Promise<void>;
 }
@@ -233,6 +237,14 @@ export const useMultiplayStore = create<MultiplayState>((set, get) => ({
     if (gaguStatus) {
       updates[`rooms/${roomId}/gameState/gaguStatus`] = gaguStatus;
     }
+    
+    // If it's Sutujeon, init trick data
+    const { roomConfig } = get();
+    if (roomConfig?.gameMode === 'SUTUJEON') {
+      updates[`rooms/${roomId}/gameState/sutujeonTotalTricks`] = 0;
+      updates[`rooms/${roomId}/gameState/sutujeonTrickActions`] = [];
+      updates[`rooms/${roomId}/gameState/ledSuit`] = null;
+    }
 
     await update(ref(db), updates);
   },
@@ -402,6 +414,117 @@ export const useMultiplayStore = create<MultiplayState>((set, get) => ({
         showdownHands[uid] = privatePlayers[uid].hand || [];
       });
       updates[`rooms/${roomId}/gameState/showdownHands`] = showdownHands;
+    }
+
+    await update(ref(db), updates);
+  },
+
+  playCardSutujeon: async (cardId) => {
+    const { roomId, myId, privateHand, gameState, publicPlayers } = get();
+    if (!roomId || !myId || !gameState || gameState.phase !== 'PLAYER_ACTION') return;
+    if (gameState.currentTurn !== myId) return;
+
+    const db = getFirebaseDb();
+    
+    const newHand = (privateHand as string[]).filter(c => c !== cardId);
+    
+    // Parse card suit for ledSuit
+    const parts = cardId.split('_');
+    const suit = parts[0];
+
+    const currentActions = gameState.sutujeonTrickActions || [];
+    const newActions = [...currentActions, { playerId: myId, cardId }];
+    
+    const updates: Record<string, any> = {};
+    updates[`rooms/${roomId}/privatePlayers/${myId}/hand`] = newHand;
+    updates[`rooms/${roomId}/publicPlayers/${myId}/cardCount`] = newHand.length;
+    updates[`rooms/${roomId}/gameState/sutujeonTrickActions`] = newActions;
+
+    if (currentActions.length === 0) {
+      // First card in trick sets the ledSuit
+      updates[`rooms/${roomId}/gameState/ledSuit`] = suit;
+    }
+
+    if (newActions.length === 4) {
+      // Trick is over, go to eval phase
+      updates[`rooms/${roomId}/gameState/phase`] = 'TRICK_EVAL';
+      updates[`rooms/${roomId}/gameState/currentTurn`] = null;
+    } else {
+      // Pass turn to next player
+      const players = Object.keys(publicPlayers).sort();
+      const myIdx = players.indexOf(myId);
+      const nextTurn = players[(myIdx + 1) % 4];
+      updates[`rooms/${roomId}/gameState/currentTurn`] = nextTurn;
+    }
+
+    await update(ref(db), updates);
+  },
+
+  evaluateSutujeonTrick: async () => {
+    const { roomId, isHost, gameState, publicPlayers } = get();
+    if (!roomId || !isHost || !gameState || gameState.phase !== 'TRICK_EVAL') return;
+    
+    const actions = gameState.sutujeonTrickActions || [];
+    if (actions.length !== 4) return;
+
+    const db = getFirebaseDb();
+    
+    // Import dynamically or calculate here to avoid circular dep
+    const getCardPower = (rank: number, suit: string) => {
+      if (rank === 10) return 11;
+      const highWinsSuits = ['PERSON', 'FISH', 'BIRD', 'PHEASANT'];
+      if (highWinsSuits.includes(suit)) return rank + 1;
+      return (10 - rank) + 1;
+    };
+
+    const ledSuit = gameState.ledSuit;
+    let highestPower = -1;
+    let winnerId = '';
+
+    for (const action of actions) {
+      const [suit, rankStr] = action.cardId.split('_');
+      const rank = parseInt(rankStr, 10);
+      
+      if (suit === ledSuit) {
+        const power = getCardPower(rank, suit);
+        if (power > highestPower) {
+          highestPower = power;
+          winnerId = action.playerId;
+        }
+      }
+    }
+
+    const updates: Record<string, any> = {};
+    
+    // Increment winner score (tricks won)
+    const currentScore = publicPlayers[winnerId]?.score || 0;
+    updates[`rooms/${roomId}/publicPlayers/${winnerId}/score`] = currentScore + 1;
+
+    const totalTricks = (gameState.sutujeonTotalTricks || 0) + 1;
+    updates[`rooms/${roomId}/gameState/sutujeonTotalTricks`] = totalTricks;
+
+    if (totalTricks >= 20) {
+      // Game over, find overall winner
+      // publicPlayers is currently stale here for the winner, so calculate manually
+      let maxScore = -1;
+      let overallWinner = '';
+      
+      Object.keys(publicPlayers).forEach(uid => {
+        const score = uid === winnerId ? currentScore + 1 : publicPlayers[uid].score;
+        if (score > maxScore) {
+          maxScore = score;
+          overallWinner = uid;
+        }
+      });
+      
+      updates[`rooms/${roomId}/gameState/phase`] = 'RESULT';
+      updates[`rooms/${roomId}/gameState/winnerId`] = overallWinner;
+    } else {
+      // Next trick
+      updates[`rooms/${roomId}/gameState/phase`] = 'PLAYER_ACTION';
+      updates[`rooms/${roomId}/gameState/currentTurn`] = winnerId;
+      updates[`rooms/${roomId}/gameState/ledSuit`] = null;
+      updates[`rooms/${roomId}/gameState/sutujeonTrickActions`] = [];
     }
 
     await update(ref(db), updates);
