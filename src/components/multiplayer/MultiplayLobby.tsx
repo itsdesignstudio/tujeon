@@ -38,6 +38,7 @@ export default function MultiplayLobby({ onBack }: MultiplayLobbyProps = {}) {
   const [joinCode, setJoinCode] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   // ── Create Room ──
   const handleCreateRoom = useCallback(async () => {
@@ -49,8 +50,17 @@ export default function MultiplayLobby({ onBack }: MultiplayLobbyProps = {}) {
         gameMode: selectedMode,
         maxPlayers: selectedMode === 'SUTUJEON' ? 4 : 2,
       };
-      await createRoom(config, playerName.trim());
+      const newRoomId = await createRoom(config, finalName);
       setStep('WAITING');
+      
+      // Auto-copy the room code
+      try {
+        await navigator.clipboard.writeText(newRoomId);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 3000);
+      } catch (err) {
+        console.error('Failed to copy room code', err);
+      }
     } catch (e: any) {
       setError(getErrorMessage(e, '방 생성에 실패했습니다.'));
     } finally {
@@ -301,13 +311,21 @@ export default function MultiplayLobby({ onBack }: MultiplayLobbyProps = {}) {
                 방 코드
               </div>
               <div
-                className="text-2xl sm:text-3xl font-mono font-bold tracking-[0.3em] select-all"
+                onClick={() => {
+                  if (roomId) {
+                    navigator.clipboard.writeText(roomId);
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 3000);
+                  }
+                }}
+                className="text-2xl sm:text-3xl font-mono font-bold tracking-[0.3em] cursor-pointer hover:opacity-80 transition-opacity"
                 style={{ color: 'var(--tujeon-gold-light)' }}
+                title="클릭하여 복사"
               >
                 {roomId || '---'}
               </div>
-              <div className="text-[10px] mt-1.5" style={{ color: 'var(--tujeon-cream-dim)' }}>
-                이 코드를 상대방에게 전달하세요
+              <div className="text-[10px] mt-1.5 transition-colors" style={{ color: copied ? '#4ade80' : 'var(--tujeon-cream-dim)' }}>
+                {copied ? '방 코드가 복사되었습니다!' : '이 코드를 상대방에게 전달하세요'}
               </div>
             </div>
 
