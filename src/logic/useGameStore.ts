@@ -46,7 +46,7 @@ const INITIAL_STATE: Omit<GameState,
   gamePhase: 'LOBBY',
   winnerId: null,
   roundNumber: 0,
-  betAmount: 50,
+  betAmount: 100,
 };
 
 // ── Store ──

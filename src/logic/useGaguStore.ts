@@ -10,7 +10,7 @@ const INITIAL_STATE: Omit<GaguState, 'initGagu' | 'dealCards' | 'hit' | 'stand' 
   gamePhase: 'INIT',
   winnerId: null,
   roundNumber: 0,
-  betAmount: 50,
+  betAmount: 100,
 };
 
 export const useGaguStore = create<GaguState>((set, get) => ({
