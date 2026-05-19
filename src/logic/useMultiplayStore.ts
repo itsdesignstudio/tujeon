@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { ref, onValue, set as firebaseSet, update, get as firebaseGet, child, push, off } from 'firebase/database';
+import { ref, onValue, set as firebaseSet, remove as firebaseRemove, update, get as firebaseGet, child, push, off, onDisconnect } from 'firebase/database';
 import { getFirebaseDb, loginAnonymously } from '@/lib/firebase';
 import { Card, GameMode } from '@/types/game';
 
@@ -160,6 +160,9 @@ export const useMultiplayStore = create<MultiplayState>((set, get) => ({
       await firebaseSet(ref(db, `rooms/${roomId}/privatePlayers/${myId}/hand`), []);
     }
 
+    // Automatically remove myself from publicPlayers when disconnected
+    onDisconnect(meRef).remove();
+
     set({ roomId, myId });
 
     // Setup Listeners
@@ -181,6 +184,15 @@ export const useMultiplayStore = create<MultiplayState>((set, get) => ({
     if (!roomId) return;
 
     const db = getFirebaseDb();
+    
+    // Explicitly remove myself from the room
+    if (myId) {
+      firebaseRemove(ref(db, `rooms/${roomId}/publicPlayers/${myId}`));
+      firebaseRemove(ref(db, `rooms/${roomId}/privatePlayers/${myId}`));
+      // Also cancel the onDisconnect since we are leaving cleanly
+      onDisconnect(ref(db, `rooms/${roomId}/publicPlayers/${myId}`)).cancel();
+    }
+
     // Remove listeners
     off(ref(db, `rooms/${roomId}/config`));
     off(ref(db, `rooms/${roomId}/gameState`));

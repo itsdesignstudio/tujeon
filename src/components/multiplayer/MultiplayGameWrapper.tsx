@@ -8,7 +8,20 @@ import MultiplayGameBoard from '@/components/multiplayer/MultiplayGameBoard';
 
 export default function MultiplayGameWrapper({ mode }: { mode: string }) {
   const router = useRouter();
-  const { roomId, gameState } = useMultiplayStore();
+  const { roomId, gameState, publicPlayers, leaveRoom } = useMultiplayStore();
+  const [playerLeft, setPlayerLeft] = React.useState(false);
+
+  React.useEffect(() => {
+    // If the game has started (not LOBBY) and players drop below 2
+    if (gameState && gameState.phase !== 'LOBBY' && publicPlayers && Object.keys(publicPlayers).length < 2) {
+      setPlayerLeft(true);
+      const timer = setTimeout(() => {
+        leaveRoom();
+        router.push('/');
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [gameState, publicPlayers, leaveRoom, router]);
 
   if (!roomId || !gameState) {
     return (
@@ -43,9 +56,22 @@ export default function MultiplayGameWrapper({ mode }: { mode: string }) {
     </button>
   );
 
+  const PlayerLeftOverlay = playerLeft ? (
+    <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center" style={{ background: 'rgba(0,0,0,0.85)' }}>
+      <div className="text-xl sm:text-2xl font-bold mb-4 anim-fade-up text-center" style={{ fontFamily: 'var(--font-serif)', color: 'var(--tujeon-red-light)' }}>
+        상대방이 방을 나갔습니다.<br/>
+        게임을 종료합니다.
+      </div>
+      <div className="text-sm anim-pulse-glow" style={{ color: 'var(--tujeon-cream-dim)' }}>
+        잠시 후 홈으로 이동합니다...
+      </div>
+    </div>
+  ) : null;
+
   if (mode === 'GAGU') {
     return (
       <>
+        {PlayerLeftOverlay}
         {BackButton}
         <MultiplayGaguBoard />
       </>
@@ -54,6 +80,7 @@ export default function MultiplayGameWrapper({ mode }: { mode: string }) {
 
   return (
     <>
+      {PlayerLeftOverlay}
       {BackButton}
       <MultiplayGameBoard />
     </>
