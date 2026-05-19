@@ -1,5 +1,5 @@
 import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
-import { getAuth, signInAnonymously, Auth } from 'firebase/auth';
+import { getAuth, signInAnonymously, Auth, setPersistence, browserSessionPersistence } from 'firebase/auth';
 import { getDatabase, Database } from 'firebase/database';
 
 const firebaseConfig = {
@@ -42,6 +42,7 @@ export function getFirebaseAuth(): Auth {
 export const loginAnonymously = async () => {
   try {
     const auth = getFirebaseAuth();
+    await setPersistence(auth, browserSessionPersistence);
     const userCredential = await signInAnonymously(auth);
     return userCredential.user;
   } catch (error) {
