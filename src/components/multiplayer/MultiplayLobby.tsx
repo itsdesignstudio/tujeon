@@ -3,6 +3,7 @@
 import React, { useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMultiplayStore, RoomConfig } from '@/logic/useMultiplayStore';
+import { createDeck, shuffleDeck, dealFromDeck } from '@/data/deck';
 import { GAME_MODE_INFO, GameMode } from '@/types/game';
 import Button from '@/components/ui/Button';
 import PlayerList from './PlayerList';
@@ -86,13 +87,29 @@ export default function MultiplayLobby({ onBack }: MultiplayLobbyProps = {}) {
   // ── Start Game (Host only) ──
   const handleStartGame = useCallback(async () => {
     if (!isHost || !roomConfig) return;
-    // For now, we just transition the phase.
-    // The host would deal cards via the game engine and call dealCardsToPlayers.
-    await updateGameState({ phase: 'DEAL' });
+    
+    // Determine the number of cards per player
+    let numCards = 2; // Default for GAGU
+    if (roomConfig.gameMode === 'SUTUJEON') numCards = 20;
+    else if (roomConfig.gameMode === 'DOLRYEO_DAEGI') numCards = 5;
+
+    // Create and shuffle deck (Sutujeon uses 80 cards, others 40)
+    let deck = shuffleDeck(createDeck(roomConfig.gameMode === 'SUTUJEON' ? 80 : 40));
+    const playersHands: Record<string, string[]> = {};
+
+    // Deal cards to each player in the room
+    Object.keys(publicPlayers).forEach((uid) => {
+      const { dealt, remaining } = dealFromDeck(deck, numCards);
+      deck = remaining;
+      playersHands[uid] = dealt.map(c => c.id);
+    });
+
+    // Save hands and update phase to PLAYER_ACTION
+    await dealCardsToPlayers(playersHands);
 
     // Navigate to the game page with multiplay flag
     router.push(`/game?mode=${roomConfig.gameMode}&multiplay=true`);
-  }, [isHost, roomConfig, updateGameState, router]);
+  }, [isHost, roomConfig, publicPlayers, dealCardsToPlayers, router]);
 
   // ── Leave ──
   const handleLeave = useCallback(() => {
