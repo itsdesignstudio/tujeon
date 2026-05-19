@@ -41,10 +41,7 @@ export default function MultiplayLobby({ onBack }: MultiplayLobbyProps = {}) {
 
   // ── Create Room ──
   const handleCreateRoom = useCallback(async () => {
-    if (!playerName.trim()) {
-      setError('닉네임을 입력해 주세요.');
-      return;
-    }
+    const finalName = playerName.trim() || '익명의 투전자';
     setLoading(true);
     setError('');
     try {
@@ -63,19 +60,16 @@ export default function MultiplayLobby({ onBack }: MultiplayLobbyProps = {}) {
 
   // ── Join Room ──
   const handleJoinRoom = useCallback(async () => {
-    if (!playerName.trim()) {
-      setError('닉네임을 입력해 주세요.');
-      return;
-    }
     if (!joinCode.trim()) {
       setError('방 코드를 입력해 주세요.');
       return;
     }
+    const finalName = playerName.trim() || '익명의 투전자';
     setLoading(true);
     setError('');
     try {
       const formattedCode = joinCode.trim().toUpperCase();
-      await joinRoom(formattedCode, playerName.trim());
+      await joinRoom(formattedCode, finalName);
       setStep('WAITING');
     } catch (e: any) {
       setError(getErrorMessage(e, '방 입장에 실패했습니다.'));
