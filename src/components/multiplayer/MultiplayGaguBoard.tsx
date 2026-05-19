@@ -17,13 +17,16 @@ export default function MultiplayGaguBoard() {
     publicPlayers,
     privateHand,
     isHost,
-    playCard,
+    hitGagu,
+    standGagu,
+    evaluateGaguShowdown,
     updateGameState,
   } = useMultiplayStore();
 
   const phase = gameState?.phase || 'LOBBY';
   const isMyTurn = gameState?.currentTurn === myId;
   const myCards = privateHand as string[];
+  const myGaguStatus = myId && gameState?.gaguStatus ? gameState.gaguStatus[myId] : null;
 
   // Get opponent info
   const opponents = Object.entries(publicPlayers).filter(([uid]) => uid !== myId);
@@ -46,10 +49,14 @@ export default function MultiplayGaguBoard() {
     return { suit, rank, suitInfo };
   };
 
-  const handlePlayCard = useCallback(async (cardId: string) => {
-    if (!isMyTurn) return;
-    await playCard(cardId);
-  }, [isMyTurn, playCard]);
+  // Host evaluates showdown when all players have stood (phase transitions to SHOWDOWN)
+  React.useEffect(() => {
+    if (isHost && phase === 'SHOWDOWN') {
+      setTimeout(() => {
+        evaluateGaguShowdown();
+      }, 1500);
+    }
+  }, [isHost, phase, evaluateGaguShowdown]);
 
   const isShowdown = phase === 'SHOWDOWN' || phase === 'RESULT';
 
@@ -98,26 +105,52 @@ export default function MultiplayGaguBoard() {
                   {info.name}
                 </span>
                 <span className="text-[10px] sm:text-xs" style={{ color: 'var(--tujeon-cream-dim)' }}>
-                  카드: {info.cardCount}장 · 점수: {info.score}
+                  카드: {info.cardCount}장 
+                  {gameState?.gaguStatus?.[uid]?.hasStood && ' · (Stand)'}
+                  {isShowdown && ` · 점수: ${getScoreLabel(gameState?.gaguStatus?.[uid]?.score || 0)}`}
                 </span>
               </div>
             </div>
-            {/* Dummy card backs */}
             <div className="flex gap-1">
-              {Array.from({ length: info.cardCount }).map((_, i) => (
-                <div
-                  key={i}
-                  className="rounded-md"
-                  style={{
-                    width: 40,
-                    height: 60,
-                    background: `repeating-conic-gradient(var(--tujeon-red) 0% 25%, var(--tujeon-blue) 25% 50%) 50% / 14px 14px`,
-                    border: '2px solid var(--tujeon-gold-dim)',
-                    borderRadius: 'var(--card-radius)',
-                    boxShadow: 'var(--shadow-card)',
-                  }}
-                />
-              ))}
+              {isShowdown && gameState?.showdownHands?.[uid] ? (
+                gameState.showdownHands[uid].map((cardId, i) => {
+                  const parsed = parseCardId(cardId);
+                  if (!parsed) return null;
+                  return (
+                    <div
+                      key={i}
+                      className="w-10 h-14 sm:w-14 sm:h-20 rounded-md flex flex-col items-center justify-center"
+                      style={{
+                        background: 'linear-gradient(145deg, var(--tujeon-cream), #e8d5b0)',
+                        border: `2px solid ${parsed.suitInfo.color}`,
+                        boxShadow: 'var(--shadow-card)',
+                      }}
+                    >
+                      <span className="text-sm sm:text-lg font-black" style={{ fontFamily: 'var(--font-serif)', color: parsed.suitInfo.color }}>
+                        {parsed.suitInfo.hanja}
+                      </span>
+                      <span className="text-[10px] sm:text-xs font-bold" style={{ color: 'var(--tujeon-black)' }}>
+                        {parsed.rank === 10 ? '장' : parsed.rank}
+                      </span>
+                    </div>
+                  );
+                })
+              ) : (
+                Array.from({ length: info.cardCount }).map((_, i) => (
+                  <div
+                    key={i}
+                    className="rounded-md"
+                    style={{
+                      width: 40,
+                      height: 60,
+                      background: `repeating-conic-gradient(var(--tujeon-red) 0% 25%, var(--tujeon-blue) 25% 50%) 50% / 14px 14px`,
+                      border: '2px solid var(--tujeon-gold-dim)',
+                      borderRadius: 'var(--card-radius)',
+                      boxShadow: 'var(--shadow-card)',
+                    }}
+                  />
+                ))
+              )}
             </div>
           </div>
         ))}
@@ -130,47 +163,48 @@ export default function MultiplayGaguBoard() {
           style={{ fontFamily: 'var(--font-serif)', color: 'var(--tujeon-gold)' }}
           key={phase}
         >
-          {phase === 'PLAYER_ACTION' && isMyTurn && '카드를 선택하세요'}
+          {phase === 'PLAYER_ACTION' && isMyTurn && '카드를 더 받으시겠습니까?'}
           {phase === 'PLAYER_ACTION' && !isMyTurn && '상대방의 턴입니다...'}
           {phase === 'SHOWDOWN' && '패 공개 중...'}
           {phase === 'RESULT' && '라운드 종료'}
         </div>
 
-        {/* Table cards */}
-        {gameState?.tableCards && Object.keys(gameState.tableCards).length > 0 && (
-          <div className="flex gap-3 items-center">
-            {Object.entries(gameState.tableCards).map(([uid, cardId]) => {
-              const parsed = parseCardId(cardId);
-              if (!parsed) return null;
-              return (
-                <div key={uid} className="flex flex-col items-center gap-1">
-                  <div
-                    className="w-14 h-20 sm:w-16 sm:h-24 rounded-md flex flex-col items-center justify-center"
-                    style={{
-                      background: 'linear-gradient(145deg, var(--tujeon-cream), #e8d5b0)',
-                      border: `2px solid ${parsed.suitInfo.color}`,
-                      boxShadow: 'var(--shadow-card)',
-                    }}
-                  >
-                    <span className="text-lg sm:text-xl font-black" style={{ fontFamily: 'var(--font-serif)', color: parsed.suitInfo.color }}>
-                      {parsed.suitInfo.hanja}
-                    </span>
-                    <span className="text-xs font-bold" style={{ color: 'var(--tujeon-black)' }}>
-                      {parsed.rank === 10 ? '장' : parsed.rank}
-                    </span>
-                  </div>
-                  <span className="text-[10px]" style={{ color: 'var(--tujeon-cream-dim)' }}>
-                    {uid === myId ? '나' : publicPlayers[uid]?.name || uid.slice(0, 4)}
-                  </span>
-                </div>
-              );
-            })}
+        {/* Action Buttons */}
+        {phase === 'PLAYER_ACTION' && isMyTurn && !myGaguStatus?.hasStood && (
+          <div className="flex gap-3 anim-fade-up">
+            <Button
+              onClick={() => hitGagu()}
+              disabled={myCards.length >= 3}
+              className="w-32"
+            >
+              카드 받기
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() => standGagu()}
+              className="w-32"
+            >
+              멈춤
+            </Button>
           </div>
         )}
+        {/* Removed table cards */}
       </div>
 
       {/* ── My Hand (bottom) ── */}
-      <div className="mb-4 sm:mb-8 flex flex-col items-center gap-2 w-full max-w-lg">
+      <div className="mb-4 sm:mb-8 flex flex-col items-center gap-2 w-full max-w-lg relative">
+        {/* Winner Overlay */}
+        {phase === 'RESULT' && gameState?.winnerId && (
+          <div className="absolute -top-24 left-1/2 -translate-x-1/2 z-50 whitespace-nowrap">
+            <div className="px-6 py-3 rounded-full glass-panel border-2 border-yellow-500/50 flex items-center gap-3 anim-fade-up"
+                 style={{ background: 'rgba(0,0,0,0.8)' }}>
+              <span className="text-2xl font-black" style={{ fontFamily: 'var(--font-serif)', color: 'var(--tujeon-gold)' }}>
+                {gameState.winnerId === 'DRAW' ? '무승부!' : (gameState.winnerId === myId ? '승리!' : '패배...')}
+              </span>
+            </div>
+          </div>
+        )}
+
         {myInfo && (
           <div className="glass-panel px-3 sm:px-5 py-2 sm:py-3 flex items-center gap-3 w-full justify-center">
             <div
@@ -184,10 +218,10 @@ export default function MultiplayGaguBoard() {
               나
             </div>
             <span className="font-bold text-sm sm:text-base" style={{ fontFamily: 'var(--font-serif)', color: 'var(--tujeon-cream)' }}>
-              {myInfo.name}
+              {myInfo.name} {myGaguStatus?.hasStood && '(Stand)'}
             </span>
             <span className="text-xs" style={{ color: 'var(--tujeon-cream-dim)' }}>
-              점수: {myInfo.score}
+              내 점수: {myGaguStatus ? getScoreLabel(myGaguStatus.score) : '?'}
             </span>
           </div>
         )}
@@ -212,8 +246,7 @@ export default function MultiplayGaguBoard() {
                 card={card}
                 isFaceUp={true}
                 isSelected={false}
-                isDisabled={!isMyTurn}
-                onClick={() => handlePlayCard(cardId)}
+                isDisabled={true} // Cards are not playable directly in Gagu
                 dealDelay={idx * 100}
                 size="md"
               />

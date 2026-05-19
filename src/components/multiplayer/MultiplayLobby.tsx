@@ -92,14 +92,22 @@ export default function MultiplayLobby({ onBack }: MultiplayLobbyProps = {}) {
     const playersHands: Record<string, string[]> = {};
 
     // Deal cards to each player in the room
+    const gaguStatus: Record<string, { hasStood: boolean; score: number }> = {};
     Object.keys(publicPlayers).forEach((uid) => {
       const { dealt, remaining } = dealFromDeck(deck, numCards);
       deck = remaining;
       playersHands[uid] = dealt.map(c => c.id);
+      
+      const scoreSum = dealt.reduce((acc, c) => acc + c.rank, 0);
+      gaguStatus[uid] = { hasStood: false, score: scoreSum % 10 };
     });
 
     // Save hands and update phase to PLAYER_ACTION
-    await dealCardsToPlayers(playersHands);
+    await dealCardsToPlayers({
+      playersHands,
+      deck: deck.map(c => c.id),
+      gaguStatus
+    });
 
     // Navigate to the game page with multiplay flag
     router.push(`/game?mode=${roomConfig.gameMode}&multiplay=true`);

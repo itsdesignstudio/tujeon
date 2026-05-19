@@ -17,6 +17,10 @@ export interface RTDBGameState {
   currentTurn: string | null;
   ledSuit?: string | null; // For Sutujeon
   tableCards?: Record<string, string>; // { [userId]: cardId }
+  deck?: string[]; // For Gagu
+  gaguStatus?: Record<string, { hasStood: boolean; score: number }>; // For Gagu
+  winnerId?: string | null; // For Gagu
+  showdownHands?: Record<string, string[]>; // For Gagu
 }
 
 export interface RTDBPublicPlayer {
@@ -49,8 +53,11 @@ export interface MultiplayState {
   leaveRoom: () => void;
   
   // Game Actions
-  dealCardsToPlayers: (playersHands: Record<string, string[]>) => Promise<void>;
+  dealCardsToPlayers: (params: { playersHands: Record<string, string[]>; deck: string[]; gaguStatus?: Record<string, { hasStood: boolean; score: number }> }) => Promise<void>;
   playCard: (cardId: string) => Promise<void>;
+  hitGagu: () => Promise<void>;
+  standGagu: () => Promise<void>;
+  evaluateGaguShowdown: () => Promise<void>;
   endTurn: (nextUserId: string) => Promise<void>;
   updateGameState: (newState: Partial<RTDBGameState>) => Promise<void>;
 }
@@ -192,7 +199,7 @@ export const useMultiplayStore = create<MultiplayState>((set, get) => ({
     });
   },
 
-  dealCardsToPlayers: async (playersHands) => {
+  dealCardsToPlayers: async ({ playersHands, deck, gaguStatus }) => {
     const { roomId, isHost, publicPlayers } = get();
     if (!roomId || !isHost) return;
 
@@ -207,6 +214,13 @@ export const useMultiplayStore = create<MultiplayState>((set, get) => ({
 
     // Also update phase to DEAL or PLAYER_ACTION
     updates[`rooms/${roomId}/gameState/phase`] = 'PLAYER_ACTION';
+    
+    if (deck) {
+      updates[`rooms/${roomId}/gameState/deck`] = deck;
+    }
+    if (gaguStatus) {
+      updates[`rooms/${roomId}/gameState/gaguStatus`] = gaguStatus;
+    }
 
     await update(ref(db), updates);
   },
@@ -251,5 +265,133 @@ export const useMultiplayStore = create<MultiplayState>((set, get) => ({
 
     const db = getFirebaseDb();
     await update(ref(db, `rooms/${roomId}/gameState`), newState);
+  },
+
+  hitGagu: async () => {
+    const { roomId, myId, privateHand, gameState, publicPlayers } = get();
+    if (!roomId || !myId || !gameState || !gameState.deck) return;
+    if (gameState.currentTurn !== myId) return;
+
+    const db = getFirebaseDb();
+    
+    const deck = [...gameState.deck];
+    if (deck.length === 0) return;
+    const drawnCard = deck.shift()!;
+
+    const newHand = [...(privateHand as string[]), drawnCard];
+    
+    const scoreSum = newHand.reduce((acc, c) => acc + parseInt(c.split('_')[1], 10), 0);
+    const newScore = scoreSum % 10;
+    
+    const hasStood = newHand.length >= 3;
+
+    const updates: Record<string, any> = {};
+    updates[`rooms/${roomId}/privatePlayers/${myId}/hand`] = newHand;
+    updates[`rooms/${roomId}/publicPlayers/${myId}/cardCount`] = newHand.length;
+    updates[`rooms/${roomId}/gameState/deck`] = deck;
+    updates[`rooms/${roomId}/gameState/gaguStatus/${myId}/score`] = newScore;
+    updates[`rooms/${roomId}/gameState/gaguStatus/${myId}/hasStood`] = hasStood;
+
+    // Check if turn should pass
+    let nextPhase = gameState.phase;
+    let nextTurn = gameState.currentTurn;
+
+    if (hasStood) {
+      // Find next player who hasn't stood
+      const players = Object.keys(publicPlayers);
+      const myIdx = players.indexOf(myId);
+      
+      let foundNext = false;
+      for (let i = 1; i < players.length; i++) {
+        const nextId = players[(myIdx + i) % players.length];
+        const pStatus = gameState.gaguStatus?.[nextId];
+        if (!pStatus?.hasStood) {
+          nextTurn = nextId;
+          foundNext = true;
+          break;
+        }
+      }
+      
+      if (!foundNext) {
+        nextPhase = 'SHOWDOWN';
+      }
+    }
+
+    if (nextPhase !== gameState.phase) updates[`rooms/${roomId}/gameState/phase`] = nextPhase;
+    if (nextTurn !== gameState.currentTurn) updates[`rooms/${roomId}/gameState/currentTurn`] = nextTurn;
+
+    await update(ref(db), updates);
+  },
+
+  standGagu: async () => {
+    const { roomId, myId, gameState, publicPlayers } = get();
+    if (!roomId || !myId || !gameState) return;
+    if (gameState.currentTurn !== myId) return;
+
+    const db = getFirebaseDb();
+    const updates: Record<string, any> = {};
+    updates[`rooms/${roomId}/gameState/gaguStatus/${myId}/hasStood`] = true;
+
+    // Find next player who hasn't stood
+    const players = Object.keys(publicPlayers);
+    const myIdx = players.indexOf(myId);
+    
+    let nextPhase = gameState.phase;
+    let nextTurn = gameState.currentTurn;
+    let foundNext = false;
+    for (let i = 1; i < players.length; i++) {
+      const nextId = players[(myIdx + i) % players.length];
+      const pStatus = gameState.gaguStatus?.[nextId];
+      if (!pStatus?.hasStood) {
+        nextTurn = nextId;
+        foundNext = true;
+        break;
+      }
+    }
+    
+    if (!foundNext) {
+      nextPhase = 'SHOWDOWN';
+    }
+
+    if (nextPhase !== gameState.phase) updates[`rooms/${roomId}/gameState/phase`] = nextPhase;
+    if (nextTurn !== gameState.currentTurn) updates[`rooms/${roomId}/gameState/currentTurn`] = nextTurn;
+
+    await update(ref(db), updates);
+  },
+
+  evaluateGaguShowdown: async () => {
+    const { roomId, isHost, gameState } = get();
+    if (!roomId || !isHost || !gameState || !gameState.gaguStatus) return;
+
+    const db = getFirebaseDb();
+    const uids = Object.keys(gameState.gaguStatus);
+    if (uids.length < 2) return;
+
+    // Simple 2-player eval for now
+    const p1 = uids[0];
+    const p2 = uids[1];
+    const s1 = gameState.gaguStatus[p1].score;
+    const s2 = gameState.gaguStatus[p2].score;
+
+    let winnerId = 'DRAW';
+    if (s1 > s2) winnerId = p1;
+    else if (s2 > s1) winnerId = p2;
+
+    const updates: Record<string, any> = {};
+    updates[`rooms/${roomId}/gameState/winnerId`] = winnerId;
+    updates[`rooms/${roomId}/gameState/phase`] = 'RESULT';
+    
+    // Fetch private hands to show them to everyone
+    const privatePlayersSnap = await firebaseGet(child(ref(db), `rooms/${roomId}/privatePlayers`));
+    if (privatePlayersSnap.exists()) {
+      const privatePlayers = privatePlayersSnap.val();
+      const showdownHands: Record<string, string[]> = {};
+      Object.keys(privatePlayers).forEach(uid => {
+        showdownHands[uid] = privatePlayers[uid].hand || [];
+      });
+      updates[`rooms/${roomId}/gameState/showdownHands`] = showdownHands;
+    }
+
+    await update(ref(db), updates);
   }
 }));
