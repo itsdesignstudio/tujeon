@@ -154,13 +154,13 @@ export default function Home() {
         {/* Action Buttons */}
         <div className="flex flex-col items-center gap-2.5 sm:gap-3 anim-fade-up w-full" style={{ animationDelay: '0.4s' }}>
           <Button size="lg" onClick={handleStartGame} className="w-full sm:w-auto">
-            혼자 플레이 (봇 대전)
+            혼자 놀기
           </Button>
           <Button size="lg" variant="secondary" onClick={() => setShowMultiplay(true)} className="w-full sm:w-auto">
-            🌐 멀티플레이
+            같이 놀기
           </Button>
-          <Button variant="secondary" size="sm" onClick={() => setShowTutorial(true)}>
-            게임 방법 보기
+          <Button size="lg" variant="secondary" onClick={() => setShowTutorial(true)} className="w-full sm:w-auto">
+            방법 보기
           </Button>
         </div>
 
