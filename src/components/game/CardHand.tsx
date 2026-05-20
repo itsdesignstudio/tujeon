@@ -11,6 +11,8 @@ interface CardHandProps {
   isInteractive?: boolean;
   onCardClick?: (cardId: string) => void;
   size?: 'xs' | 'sm' | 'md' | 'lg';
+  /** Use fan (arc) layout instead of linear */
+  useFan?: boolean;
 }
 
 export default function CardHand({
@@ -20,8 +22,8 @@ export default function CardHand({
   isInteractive = true,
   onCardClick,
   size = 'md',
+  useFan,
 }: CardHandProps) {
-  // Calculate the sum of selected cards
   const selectedSum = useMemo(() => {
     return cards
       .filter((c) => selectedCardIds.includes(c.id))
@@ -31,33 +33,50 @@ export default function CardHand({
   const isValidCombination = selectedCardIds.length === 3 && selectedSum % 10 === 0;
   const hasThreeSelected = selectedCardIds.length === 3;
 
-  // Use overlap layout when there are many cards
-  const useOverlap = cards.length > 5;
+  // Selection order tracking
+  const selectionOrder = useMemo(() => {
+    const order: Record<string, number> = {};
+    selectedCardIds.forEach((id, idx) => {
+      order[id] = idx + 1;
+    });
+    return order;
+  }, [selectedCardIds]);
+
+  // Disable fan layout per user request and show cards horizontally in a clean alignment
+  const useOverlap = cards.length > 8;
 
   return (
-    <div className="flex flex-col items-center gap-2 sm:gap-3 w-full">
-      {/* Cards — scroll container ensures no clipping on small screens */}
+    <div className="flex flex-col items-center gap-2 w-full">
+      {/* Cards */}
       <div className="card-hand-scroll w-full">
-        <div className={useOverlap ? 'card-hand-overlap mx-auto' : 'flex items-end gap-1 sm:gap-2 mx-auto px-2 sm:px-4'}>
+        <div
+          className={
+            useOverlap
+              ? 'card-hand-overlap mx-auto'
+              : 'flex items-end justify-center gap-2 sm:gap-3 mx-auto px-2 sm:px-4'
+          }
+        >
           {cards.map((card, idx) => (
-            <CardComponent
-              key={card.id}
-              card={card}
-              isFaceUp={isFaceUp}
-              isSelected={selectedCardIds.includes(card.id)}
-              isDisabled={!isInteractive}
-              onClick={() => onCardClick?.(card.id)}
-              dealDelay={idx * (useOverlap ? 30 : 100)}
-              size={size}
-            />
+            <div key={card.id}>
+              <CardComponent
+                card={card}
+                isFaceUp={isFaceUp}
+                isSelected={selectedCardIds.includes(card.id)}
+                isDisabled={!isInteractive}
+                onClick={() => onCardClick?.(card.id)}
+                dealDelay={idx * (useOverlap ? 30 : 80)}
+                size={size}
+                selectionIndex={selectionOrder[card.id]}
+              />
+            </div>
           ))}
         </div>
       </div>
 
-      {/* Selection status indicator (only for interactive hands) */}
+      {/* Selection status — inline pill */}
       {isInteractive && isFaceUp && selectedCardIds.length > 0 && (
         <div
-          className="anim-fade-up text-xs sm:text-sm px-3 sm:px-4 py-1 sm:py-1.5 rounded-full"
+          className="anim-fade-up text-xs px-3 py-1 rounded-full"
           style={{
             fontFamily: 'var(--font-serif)',
             background: isValidCombination

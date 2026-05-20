@@ -16,7 +16,7 @@ export const SUIT_INFO: Record<CardSuit, { label: string; hanja: string; color: 
   FISH:     { label: '물고기', hanja: '魚', color: '#5b8fb9' },
   BIRD:     { label: '새',   hanja: '鳥', color: '#7fb069' },
   PHEASANT: { label: '꿩',   hanja: '雉', color: '#b85c5c' },
-  STAR:     { label: '별',   hanja: '星', color: '#ffd700' },
+  STAR:     { label: '별',   hanja: '星', color: '#d4a017' },
   HORSE:    { label: '말',   hanja: '馬', color: '#8b4513' },
   DEER:     { label: '사슴', hanja: '鹿', color: '#d2b48c' },
   RABBIT:   { label: '토끼', hanja: '兔', color: '#ffb6c1' },
@@ -37,7 +37,7 @@ export interface Card {
 // Game Modes
 // ============================================================
 
-export type GameMode = 'DOLRYEO_DAEGI' | 'GAGU' | 'SUTUJEON';
+export type GameMode = 'DOLRYEO_DAEGI' | 'GAGU' | 'SUTUJEON' | 'GAGUPAN';
 
 export const GAME_MODE_INFO: Record<GameMode, { label: string; description: string; available: boolean }> = {
   DOLRYEO_DAEGI: {
@@ -53,6 +53,11 @@ export const GAME_MODE_INFO: Record<GameMode, { label: string; description: stri
   SUTUJEON: {
     label: '수투전',
     description: '8문양 80장 트릭테이킹 (4인용)',
+    available: true,
+  },
+  GAGUPAN: {
+    label: '가구판',
+    description: '동/서/남 구역에 칩을 걸어 뱅커(북)와 점수를 겨루는 베팅 게임',
     available: true,
   },
 };
@@ -220,4 +225,50 @@ export interface SutujeonState {
   executeBotTurn: () => void;
   evaluateTrick: () => void;
   resetSutujeon: () => void;
+}
+
+// ============================================================
+// Gagupan Mode Types
+// ============================================================
+
+export type BettingSpotId = 'DONG' | 'SEO' | 'NAM';
+
+// 베팅 구역 상태
+export interface BettingSpot {
+  id: BettingSpotId;
+  cards: Card[];
+  score: number;
+  // 각 플레이어가 이 구역에 베팅한 금액 (key: playerId, value: chipAmount)
+  bets: Record<string, number>; 
+}
+
+// 물주(뱅커) 상태
+export interface BankerHand {
+  cards: Card[];
+  score: number;
+}
+
+export type GagupanPhase = 'BETTING' | 'DEAL' | 'DRAW_PHASE' | 'SETTLEMENT' | 'RESULT';
+
+// 가구판 전역 상태 스토어
+export interface GagupanState {
+  gamePhase: GagupanPhase;
+  deck: Card[];
+  spots: Record<BettingSpotId, BettingSpot>;
+  banker: BankerHand;
+  playerBalances: Record<string, number>; // 유저들의 보유 칩 (key: playerId)
+  winnerResults: Record<BettingSpotId, 'WIN' | 'LOSE' | 'DRAW' | null>;
+  betAmount: number; // 현재 설정된 베팅 단위
+  roundNumber: number;
+
+  // Actions
+  initGagupan: () => void;
+  placeBet: (spotId: BettingSpotId, amount: number) => void;
+  clearBets: () => void;
+  confirmBets: () => void;
+  dealCards: () => void;
+  processDraws: () => Promise<void>;
+  evaluateGagupan: () => void;
+  nextRound: () => void;
+  resetGagupan: () => void;
 }

@@ -1,8 +1,8 @@
 @import "tailwindcss";
 
 /* ============================================================
-   Tujeon (투전) — Design System
-   Traditional Korean Aesthetics + Modern Card Game UX
+   Tujeon (투전) — Design System v2
+   Mobile-First · Korean Traditional Aesthetics · Card Game UX
    ============================================================ */
 
 :root {
@@ -29,17 +29,21 @@
   --suit-fish:     #5b8fb9;
   --suit-bird:     #7fb069;
   --suit-pheasant: #b85c5c;
+  --suit-star:     #d4a017;
+  --suit-horse:    #8b6914;
+  --suit-deer:     #b8956a;
+  --suit-rabbit:   #cf8a9e;
 
-  /* ── Card Dimensions ── */
-  --card-width:  80px;
-  --card-height: 120px;
+  /* ── Card Dimensions (desktop default) ── */
+  --card-width:  68px;
+  --card-height: 102px;
   --card-radius: 8px;
 
   /* ── Shadows ── */
-  --shadow-card:     0 4px 12px rgba(0, 0, 0, 0.4);
+  --shadow-card:       0 4px 12px rgba(0, 0, 0, 0.4);
   --shadow-card-hover: 0 8px 24px rgba(0, 0, 0, 0.6);
-  --shadow-glow-gold: 0 0 20px rgba(200, 169, 110, 0.4);
-  --shadow-glow-red:  0 0 20px rgba(179, 58, 58, 0.4);
+  --shadow-glow-gold:  0 0 20px rgba(200, 169, 110, 0.4);
+  --shadow-glow-red:   0 0 20px rgba(179, 58, 58, 0.4);
 
   /* ── Typography ── */
   --font-serif: 'Noto Serif KR', serif;
@@ -64,9 +68,142 @@ body {
   color: var(--tujeon-cream);
   font-family: var(--font-sans);
   overflow-x: hidden;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-font-smoothing: antialiased;
 }
 
-/* ── Table Felt Texture ── */
+/* ============================================================
+   STATUS BAR — Top fixed bar for game info
+   ============================================================ */
+.status-bar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 44px;
+  padding: 0 max(12px, env(safe-area-inset-left)) 0 max(12px, env(safe-area-inset-right));
+  padding-top: env(safe-area-inset-top);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  z-index: 50;
+  background: rgba(13, 11, 9, 0.92);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-bottom: 1px solid rgba(200, 169, 110, 0.08);
+}
+
+.status-bar-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.75rem;
+  color: var(--tujeon-cream-dim);
+  white-space: nowrap;
+}
+
+.status-bar-value {
+  font-weight: 700;
+  color: var(--tujeon-gold);
+  font-family: var(--font-serif);
+}
+
+.status-bar-back {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  color: var(--tujeon-cream-dim);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  font-size: 1.1rem;
+  flex-shrink: 0;
+}
+
+.status-bar-back:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--tujeon-cream);
+}
+
+/* ============================================================
+   ACTION DOCK — Bottom fixed action area
+   ============================================================ */
+.action-dock {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 40;
+  padding: 8px 16px calc(12px + env(safe-area-inset-bottom));
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border-top: none;
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  align-items: center;
+  pointer-events: none;
+}
+.action-dock > * {
+  pointer-events: auto;
+}
+
+/* ============================================================
+   BOTTOM SHEET — Slide-up modal
+   ============================================================ */
+.bottom-sheet {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 50;
+  border-radius: 20px 20px 0 0;
+  background: var(--tujeon-bg-warm);
+  border-top: 2px solid rgba(200, 169, 110, 0.15);
+  box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.5);
+  padding: 20px 20px calc(24px + env(safe-area-inset-bottom));
+  max-height: 70vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.bottom-sheet-handle {
+  width: 36px;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(200, 169, 110, 0.3);
+  margin: 0 auto 16px;
+}
+
+/* ============================================================
+   INK PANEL — Korean hanji/ink styled panel
+   ============================================================ */
+.ink-panel {
+  background: rgba(26, 21, 18, 0.88);
+  border: 1px solid rgba(200, 169, 110, 0.1);
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  position: relative;
+  overflow: hidden;
+}
+
+.ink-panel::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3'/%3E%3C/filter%3E%3Crect width='60' height='60' filter='url(%23n)' opacity='0.025'/%3E%3C/svg%3E");
+  pointer-events: none;
+  opacity: 0.6;
+}
+
+/* ============================================================
+   TABLE FELT — Game table background
+   ============================================================ */
 .table-felt {
   background:
     radial-gradient(ellipse at 50% 40%, var(--tujeon-felt-light) 0%, var(--tujeon-felt) 50%, var(--tujeon-bg) 100%);
@@ -82,7 +219,20 @@ body {
   opacity: 0.5;
 }
 
-/* ── Card Base ── */
+/* ============================================================
+   GLASS PANEL — Frosted glass (legacy, still used)
+   ============================================================ */
+.glass-panel {
+  background: rgba(26, 21, 18, 0.75);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(200, 169, 110, 0.15);
+  border-radius: 16px;
+}
+
+/* ============================================================
+   CARD — Base, Front, Back, Sizes
+   ============================================================ */
 .card-base {
   width: var(--card-width);
   height: var(--card-height);
@@ -90,6 +240,8 @@ body {
   transition: transform var(--transition-normal), box-shadow var(--transition-normal);
   perspective: 600px;
   cursor: pointer;
+  flex-shrink: 0;
+  position: relative;
 }
 
 .card-base:hover {
@@ -98,15 +250,22 @@ body {
 }
 
 .card-base.selected {
-  transform: translateY(-16px) scale(1.05);
-  box-shadow: 0 0 24px rgba(200, 169, 110, 0.5), 0 8px 24px rgba(0, 0, 0, 0.4);
+  transform: translateY(-20px) scale(1.08);
+  box-shadow: 0 0 28px rgba(200, 169, 110, 0.5), 0 10px 30px rgba(0, 0, 0, 0.4);
   z-index: 10;
 }
 
 .card-base.disabled {
-  opacity: 0.5;
+  opacity: 0.4;
   pointer-events: none;
+  filter: grayscale(0.3);
 }
+
+/* Card size variants */
+.card-xs { width: 36px; height: 54px; border-radius: 4px; }
+.card-sm { width: 52px; height: 78px; border-radius: 6px; }
+.card-md { width: 68px; height: 102px; }
+.card-lg { width: 88px; height: 132px; border-radius: 10px; }
 
 /* ── Card Flip ── */
 .card-inner {
@@ -115,6 +274,7 @@ body {
   height: 100%;
   transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
   transform-style: preserve-3d;
+  border-radius: inherit;
 }
 
 .card-inner.flipped {
@@ -125,53 +285,126 @@ body {
   position: absolute;
   inset: 0;
   backface-visibility: hidden;
-  border-radius: var(--card-radius);
+  border-radius: inherit;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  overflow: hidden;
 }
 
 .card-front {
-  background: linear-gradient(145deg, var(--tujeon-cream) 0%, #e8d5b0 100%);
+  background: linear-gradient(155deg, #f8ecd4 0%, #ecdbb8 40%, #e4ceaa 100%);
   border: 2px solid var(--tujeon-gold-dim);
   color: var(--tujeon-black);
   box-shadow: var(--shadow-card);
 }
 
+/* 장(10) card special treatment */
+.card-front.card-jang {
+  border-width: 3px;
+  border-color: var(--tujeon-gold);
+  box-shadow: var(--shadow-card), inset 0 0 20px rgba(200, 169, 110, 0.12);
+}
+
 .card-back {
   background:
-    repeating-conic-gradient(
-      var(--tujeon-red) 0% 25%, var(--tujeon-blue) 25% 50%
-    ) 50% / 20px 20px;
+    repeating-linear-gradient(
+      45deg,
+      #4a1520 0px, #4a1520 8px,
+      #1a2a4a 8px, #1a2a4a 16px
+    ),
+    linear-gradient(135deg, #3a0a15 0%, #0f1a30 100%);
+  background-blend-mode: overlay;
   border: 3px solid var(--tujeon-gold);
   transform: rotateY(180deg);
   box-shadow: var(--shadow-card);
 }
 
+.card-back::before {
+  content: '投';
+  position: absolute;
+  font-family: var(--font-serif);
+  font-size: 1.6rem;
+  font-weight: 900;
+  color: var(--tujeon-gold);
+  opacity: 0.12;
+  z-index: 1;
+}
+
 .card-back::after {
   content: '';
   position: absolute;
-  inset: 6px;
+  inset: 5px;
   border: 1px solid var(--tujeon-gold-dim);
-  border-radius: calc(var(--card-radius) - 4px);
-  background: linear-gradient(135deg,
-    rgba(26, 21, 18, 0.85) 0%,
-    rgba(26, 21, 18, 0.7) 100%
-  );
+  border-radius: calc(var(--card-radius) - 3px);
+  opacity: 0.5;
 }
 
-/* ── Card Suit Icon Indicators ── */
+/* ── Suit border colors ── */
 .card-front.suit-person   { border-color: var(--suit-person); }
 .card-front.suit-fish     { border-color: var(--suit-fish); }
 .card-front.suit-bird     { border-color: var(--suit-bird); }
 .card-front.suit-pheasant { border-color: var(--suit-pheasant); }
+.card-front.suit-star     { border-color: var(--suit-star); }
+.card-front.suit-horse    { border-color: var(--suit-horse); }
+.card-front.suit-deer     { border-color: var(--suit-deer); }
+.card-front.suit-rabbit   { border-color: var(--suit-rabbit); }
 
-/* ── Animations ── */
+/* ── Card Fan Container ── */
+.card-fan {
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  position: relative;
+  perspective: 800px;
+}
+
+/* ── Card Hand Scroll Container ── */
+.card-hand-scroll {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  padding-bottom: 4px;
+}
+
+.card-hand-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+/* Overlap layout for many cards */
+.card-hand-overlap {
+  display: flex;
+  padding-left: 8px;
+  padding-right: 24px;
+}
+
+.card-hand-overlap > * {
+  margin-left: -18px;
+  transition: margin-left var(--transition-fast), transform var(--transition-fast);
+}
+
+.card-hand-overlap > *:first-child {
+  margin-left: 0;
+}
+
+.card-hand-overlap > *:hover,
+.card-hand-overlap > *:active {
+  margin-left: 4px;
+  margin-right: 16px;
+  z-index: 10;
+}
+
+/* ============================================================
+   ANIMATIONS — Keyframes
+   ============================================================ */
+
 @keyframes dealCard {
   from {
     opacity: 0;
-    transform: translate(0, -100px) rotateZ(10deg) scale(0.8);
+    transform: translate(0, -80px) rotateZ(8deg) scale(0.5);
   }
   to {
     opacity: 1;
@@ -180,14 +413,8 @@ body {
 }
 
 @keyframes fadeSlideUp {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
 @keyframes shimmer {
@@ -210,8 +437,46 @@ body {
   to   { transform: translateY(0); opacity: 1; }
 }
 
+@keyframes slideUpSheet {
+  from { transform: translateY(100%); opacity: 0; }
+  to   { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes turnPulse {
+  0%, 100% { box-shadow: 0 0 0 2px transparent; }
+  50%      { box-shadow: 0 0 0 2px rgba(200, 169, 110, 0.4); }
+}
+
+@keyframes resultReveal {
+  0%   { transform: scale(0); opacity: 0; }
+  60%  { transform: scale(1.15); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+@keyframes phaseTextIn {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes phaseTextOut {
+  from { opacity: 1; transform: translateY(0); }
+  to   { opacity: 0; transform: translateY(-12px); }
+}
+
+@keyframes cardFloat {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-3px); }
+}
+
+@keyframes chipPop {
+  0%   { transform: scale(0.5) translateY(0); opacity: 0; }
+  50%  { transform: scale(1.1) translateY(-15px); opacity: 1; }
+  100% { transform: scale(0.8) translateY(-30px); opacity: 0; }
+}
+
+/* ── Animation Utilities ── */
 .anim-deal {
-  animation: dealCard 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  animation: dealCard 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) both;
 }
 
 .anim-fade-up {
@@ -236,20 +501,49 @@ body {
   animation: scaleIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) both;
 }
 
-/* ── Button Styles ── */
+.anim-slide-up-sheet {
+  animation: slideUpSheet 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.anim-turn-pulse {
+  animation: turnPulse 2s ease-in-out infinite;
+}
+
+.anim-result-reveal {
+  animation: resultReveal 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+.anim-phase-in {
+  animation: phaseTextIn 0.35s ease-out both;
+}
+
+.anim-phase-out {
+  animation: phaseTextOut 0.25s ease-in both;
+}
+
+.anim-card-float {
+  animation: cardFloat 3s ease-in-out infinite;
+}
+
+/* ============================================================
+   BUTTONS
+   ============================================================ */
 .btn-primary {
   font-family: var(--font-serif);
   background: linear-gradient(135deg, var(--tujeon-gold) 0%, var(--tujeon-gold-dim) 100%);
   color: var(--tujeon-black);
   font-weight: 700;
-  padding: 12px 32px;
-  border-radius: 8px;
+  padding: 12px 28px;
+  border-radius: 10px;
   border: none;
   cursor: pointer;
   transition: all var(--transition-fast);
-  text-transform: none;
   letter-spacing: 0.02em;
   box-shadow: 0 4px 12px rgba(200, 169, 110, 0.3);
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .btn-primary:hover {
@@ -259,11 +553,11 @@ body {
 }
 
 .btn-primary:active {
-  transform: translateY(0);
+  transform: translateY(0) scale(0.96);
 }
 
 .btn-primary:disabled {
-  opacity: 0.4;
+  opacity: 0.35;
   cursor: not-allowed;
   transform: none;
   box-shadow: none;
@@ -274,32 +568,61 @@ body {
   background: transparent;
   color: var(--tujeon-gold);
   font-weight: 500;
-  padding: 10px 28px;
-  border-radius: 8px;
+  padding: 10px 24px;
+  border-radius: 10px;
   border: 1.5px solid var(--tujeon-gold-dim);
   cursor: pointer;
   transition: all var(--transition-fast);
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .btn-secondary:hover {
   border-color: var(--tujeon-gold);
-  background: rgba(200, 169, 110, 0.1);
+  background: rgba(200, 169, 110, 0.08);
   transform: translateY(-1px);
 }
 
-/* ── Glass Panel ── */
-.glass-panel {
-  background: rgba(26, 21, 18, 0.75);
-  backdrop-filter: blur(12px);
-  border: 1px solid rgba(200, 169, 110, 0.15);
-  border-radius: 16px;
+.btn-secondary:active {
+  transform: scale(0.96);
 }
 
-/* ── Jokbo Badge ── */
+.btn-danger {
+  font-family: var(--font-serif);
+  background: linear-gradient(135deg, var(--tujeon-red) 0%, #6b1a1a 100%);
+  color: var(--tujeon-cream);
+  font-weight: 700;
+  padding: 12px 28px;
+  border-radius: 10px;
+  border: 1px solid rgba(179, 58, 58, 0.3);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  box-shadow: 0 4px 12px rgba(179, 58, 58, 0.2);
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-danger:hover {
+  background: linear-gradient(135deg, var(--tujeon-red-light) 0%, var(--tujeon-red) 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(179, 58, 58, 0.3);
+}
+
+.btn-danger:active {
+  transform: scale(0.96);
+}
+
+/* ============================================================
+   JOKBO BADGES
+   ============================================================ */
 .jokbo-badge {
   font-family: var(--font-serif);
   font-weight: 900;
-  font-size: 1.5rem;
+  font-size: 1.4rem;
   padding: 8px 20px;
   border-radius: 12px;
   text-align: center;
@@ -393,12 +716,15 @@ body {
   border: 1px dashed #664444;
 }
 
-/* ── Modal Overlay ── */
+/* ============================================================
+   MODAL
+   ============================================================ */
 .modal-overlay {
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.7);
   backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -410,80 +736,56 @@ body {
   background: var(--tujeon-bg-warm);
   border: 1px solid rgba(200, 169, 110, 0.2);
   border-radius: 20px;
-  padding: 32px;
-  max-width: 560px;
-  width: 90%;
+  padding: 28px;
+  max-width: 480px;
+  width: 92%;
   max-height: 85vh;
   overflow-y: auto;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
   animation: scaleIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-/* ── Card Hand Scroll Container ── */
-.card-hand-scroll {
-  display: flex;
-  gap: 8px;
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-  scrollbar-width: none;
-  padding-bottom: 4px;
-}
-
-.card-hand-scroll::-webkit-scrollbar {
-  display: none;
-}
-
-/* Overlap layout for many cards */
-.card-hand-overlap {
-  display: flex;
-  padding-left: 8px;
-  padding-right: 24px;
-}
-
-.card-hand-overlap > * {
-  margin-left: -16px;
-  transition: margin-left var(--transition-fast), transform var(--transition-fast);
-}
-
-.card-hand-overlap > *:first-child {
-  margin-left: 0;
-}
-
-.card-hand-overlap > *:hover,
-.card-hand-overlap > *:active {
-  margin-left: 4px;
-  margin-right: 16px;
-  z-index: 10;
-}
-
-/* ── Mobile Touch Active States ── */
+/* ============================================================
+   MOBILE TOUCH ACTIVE STATES
+   ============================================================ */
 @media (hover: none) and (pointer: coarse) {
   .card-base:hover {
     transform: none;
     box-shadow: var(--shadow-card);
   }
   .card-base:active {
-    transform: translateY(-4px) scale(1.03);
+    transform: translateY(-6px) scale(1.04);
     box-shadow: var(--shadow-glow-gold);
   }
   .card-base.selected {
-    transform: translateY(-12px) scale(1.05);
-    box-shadow: 0 0 20px rgba(200, 169, 110, 0.5), 0 6px 20px rgba(0, 0, 0, 0.4);
+    transform: translateY(-18px) scale(1.08);
+    box-shadow: 0 0 24px rgba(200, 169, 110, 0.5), 0 8px 24px rgba(0, 0, 0, 0.4);
     z-index: 10;
   }
 }
 
-/* ── Mobile Responsive Overrides ── */
+/* ============================================================
+   MOBILE RESPONSIVE
+   ============================================================ */
 @media (max-width: 640px) {
   :root {
-    --card-width: 56px;
-    --card-height: 84px;
+    --card-width: 60px;
+    --card-height: 90px;
   }
 
-  .card-base.selected {
-    transform: translateY(-12px) scale(1.05);
-    box-shadow: 0 0 20px rgba(200, 169, 110, 0.5), 0 6px 20px rgba(0, 0, 0, 0.4);
-    z-index: 10;
+  .status-bar {
+    height: 40px;
+    gap: 6px;
+  }
+
+  .action-dock {
+    padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+    gap: 8px;
+  }
+
+  .bottom-sheet {
+    padding: 16px 16px calc(20px + env(safe-area-inset-bottom));
+    border-radius: 16px 16px 0 0;
   }
 
   .btn-primary {
@@ -497,9 +799,19 @@ body {
     font-size: 0.875rem;
   }
 
+  .btn-danger {
+    padding: 10px 20px;
+    font-size: 0.875rem;
+    border-radius: 8px;
+  }
+
   .glass-panel {
     border-radius: 12px;
     padding: 8px 12px;
+  }
+
+  .ink-panel {
+    border-radius: 10px;
   }
 
   .jokbo-badge {
@@ -511,23 +823,43 @@ body {
   .modal-content {
     padding: 20px;
     border-radius: 16px;
-    max-width: 92vw;
+    max-width: 94vw;
     max-height: 80vh;
   }
 
   .card-hand-overlap > * {
-    margin-left: -20px;
+    margin-left: -22px;
   }
 }
 
-/* ── Scrollbar ── */
+/* ============================================================
+   LANDSCAPE OPTIMIZATION
+   ============================================================ */
+@media (min-aspect-ratio: 4/3) {
+  :root {
+    --card-width: 72px;
+    --card-height: 108px;
+  }
+
+  .status-bar {
+    height: 36px;
+  }
+
+  .action-dock {
+    padding: 8px 24px calc(8px + env(safe-area-inset-bottom));
+  }
+}
+
+/* ============================================================
+   SCROLLBAR
+   ============================================================ */
 ::-webkit-scrollbar {
-  width: 6px;
+  width: 4px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
   background: var(--tujeon-gold-dim);
-  border-radius: 3px;
+  border-radius: 2px;
 }

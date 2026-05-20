@@ -1,85 +1,11 @@
 'use client';
 
 import React from 'react';
-import { Player } from '@/types/game';
+import { Player, SUIT_INFO } from '@/types/game';
 
 interface JokboDisplayProps {
   players: Player[];
   winnerId: string | null;
-}
-
-export default function JokboDisplay({ players, winnerId }: JokboDisplayProps) {
-  return (
-    <div className="anim-scale-in flex items-center justify-center gap-3 sm:gap-6 w-full px-2">
-      {players.map((player) => {
-        const isWinner = player.id === winnerId;
-        const eval_ = player.evaluation;
-
-        return (
-          <div
-            key={player.id}
-            className={`flex flex-col items-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-2 sm:py-4 rounded-xl transition-all ${
-              isWinner
-                ? 'ring-2 ring-yellow-500/50 bg-yellow-500/5'
-                : 'opacity-50'
-            }`}
-          >
-            {/* Player name */}
-            <div
-              className="text-xs sm:text-base font-bold truncate max-w-[80px] sm:max-w-none"
-              style={{ fontFamily: 'var(--font-serif)', color: 'var(--tujeon-cream)' }}
-            >
-              {player.name}
-              {isWinner && ' 👑'}
-            </div>
-
-            {/* Remaining 2 cards display — compact */}
-            {eval_ && !eval_.isHwang && (
-              <div className="flex gap-1">
-                {eval_.remaining2.map((card) => (
-                  <div
-                    key={card.id}
-                    className="w-9 h-13 sm:w-12 sm:h-18 rounded flex flex-col items-center justify-center"
-                    style={{
-                      background: 'linear-gradient(145deg, var(--tujeon-cream), #e8d5b0)',
-                      border: `1.5px solid ${
-                        card.suit === 'PERSON' ? 'var(--suit-person)' :
-                        card.suit === 'FISH' ? 'var(--suit-fish)' :
-                        card.suit === 'BIRD' ? 'var(--suit-bird)' :
-                        'var(--suit-pheasant)'
-                      }`,
-                      boxShadow: isWinner ? 'var(--shadow-glow-gold)' : 'var(--shadow-card)',
-                    }}
-                  >
-                    <span
-                      className="text-sm sm:text-lg font-black"
-                      style={{
-                        fontFamily: 'var(--font-serif)',
-                        color: 'var(--tujeon-black)',
-                      }}
-                    >
-                      {card.rank === 10 ? '장' : card.rank}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* Jokbo badge — compact */}
-            {eval_ && (
-              <div
-                className={`jokbo-badge-sm ${getJokboBadgeClass(
-                  eval_.isHwang ? 'hwang' : eval_.jokboType
-                )}`}
-              >
-                {eval_.jokboLabel}
-              </div>
-            )}
-          </div>
-        );
-      })}
-    </div>
-  );
 }
 
 function getJokboBadgeClass(type: string): string {
@@ -92,4 +18,88 @@ function getJokboBadgeClass(type: string): string {
     case 'hwang':       return 'hwang';
     default:            return '';
   }
+}
+
+export default function JokboDisplay({ players, winnerId }: JokboDisplayProps) {
+  return (
+    <div className="anim-scale-in flex items-stretch justify-center gap-4 w-full px-2 max-w-md mx-auto">
+      {players.map((player) => {
+        const isWinner = player.id === winnerId;
+        const eval_ = player.evaluation;
+
+        return (
+          <div
+            key={player.id}
+            className={`ink-panel flex flex-col items-center gap-2 px-3 py-3 flex-1 transition-all ${
+              isWinner
+                ? 'ring-2 ring-yellow-500/40'
+                : 'opacity-50'
+            }`}
+            style={{
+              background: isWinner
+                ? 'rgba(200, 169, 110, 0.08)'
+                : 'rgba(26, 21, 18, 0.7)',
+            }}
+          >
+            {/* Player name */}
+            <div
+              className="text-xs font-bold truncate max-w-[100px] flex items-center gap-1"
+              style={{ fontFamily: 'var(--font-serif)', color: 'var(--tujeon-cream)' }}
+            >
+              {isWinner && <span className="text-sm">👑</span>}
+              {player.name}
+            </div>
+
+            {/* Remaining 2 cards — using consistent mini-card style */}
+            {eval_ && !eval_.isHwang && (
+              <div className="flex gap-1">
+                {eval_.remaining2.map((card) => {
+                  const suitInfo = SUIT_INFO[card.suit];
+                  return (
+                    <div
+                      key={card.id}
+                      className="rounded flex flex-col items-center justify-center"
+                      style={{
+                        width: 36,
+                        height: 52,
+                        background: 'linear-gradient(155deg, #f8ecd4, #e4ceaa)',
+                        border: `1.5px solid ${suitInfo.color}`,
+                        boxShadow: isWinner ? 'var(--shadow-glow-gold)' : 'var(--shadow-card)',
+                      }}
+                    >
+                      <span
+                        className="text-xs font-black leading-none"
+                        style={{ fontFamily: 'var(--font-serif)', color: suitInfo.color }}
+                      >
+                        {card.rank === 10 ? '장' : card.rank}
+                      </span>
+                      <span
+                        className="text-[8px] opacity-50 leading-none mt-0.5"
+                        style={{ fontFamily: 'var(--font-serif)' }}
+                      >
+                        {suitInfo.hanja}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Jokbo badge */}
+            {eval_ && (
+              <div className="anim-result-reveal">
+                <div
+                  className={`jokbo-badge-sm ${getJokboBadgeClass(
+                    eval_.isHwang ? 'hwang' : eval_.jokboType
+                  )}`}
+                >
+                  {eval_.jokboLabel}
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
 }

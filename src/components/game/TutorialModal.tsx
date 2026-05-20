@@ -202,6 +202,50 @@ const TUTORIAL_DATA: Record<GameMode, { title: string; icon: string; content: Re
         </div>
       ),
     },
+  ],
+  GAGUPAN: [
+    {
+      title: '가구판 테이블 베팅',
+      icon: '🎲',
+      content: (
+        <div className="space-y-3">
+          <p>가구판은 <strong>물주(뱅커 - 북)</strong>와 세 개의 베팅 구역 <strong>'동', '서', '남'</strong> 간의 1:1 점수 대결입니다.</p>
+          <div className="p-4 rounded-lg" style={{ background: 'rgba(200,169,110,0.1)', border: '1px solid rgba(200,169,110,0.2)' }}>
+            <ul className="space-y-2 text-sm">
+              <li>• 유저는 '동, 서, 남' 구역 중 원하는 곳에 칩을 베팅합니다.</li>
+              <li>• 모든 구역 및 물주(북)에 2장의 카드가 분배됩니다.</li>
+              <li>• <strong>5점 이하</strong>이면 자동으로 3번째 카드를 추가 지급받습니다.</li>
+            </ul>
+          </div>
+        </div>
+      ),
+    },
+    {
+      title: '가구판 정산 및 멀티플레이',
+      icon: '💰',
+      content: (
+        <div className="space-y-3">
+          <p>물주(북)와 각 구역의 점수를 비교하여 칩을 정산합니다.</p>
+          <div className="space-y-2 mt-3">
+            <div className="p-3 rounded-lg text-xs" style={{ background: 'rgba(255,255,255,0.03)' }}>
+              <span className="font-bold text-green-400">구역 승리 (WIN)</span>
+              <p className="opacity-80">베팅한 칩의 1:1 배당만큼 추가 획득합니다.</p>
+            </div>
+            <div className="p-3 rounded-lg text-xs" style={{ background: 'rgba(255,255,255,0.03)' }}>
+              <span className="font-bold text-red-400">구역 패배 (LOSE)</span>
+              <p className="opacity-80">베팅한 칩을 뱅커(물주)에게 뺏깁니다.</p>
+            </div>
+            <div className="p-3 rounded-lg text-xs" style={{ background: 'rgba(255,255,255,0.03)' }}>
+              <span className="font-bold text-yellow-400">무승부 (DRAW)</span>
+              <p className="opacity-80">베팅한 칩을 돌려받습니다 (원금 반환).</p>
+            </div>
+          </div>
+          <p className="text-[10px] opacity-75 mt-2" style={{ color: 'var(--tujeon-gold-dim)' }}>
+            * 멀티플레이 시에는 방장(Host)이 물주(북) 역할을 전담하며, 정산 결과에 따라 방장의 칩이 직접 증감됩니다.
+          </p>
+        </div>
+      ),
+    },
   ]
 };
 

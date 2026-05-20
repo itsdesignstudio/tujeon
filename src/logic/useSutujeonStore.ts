@@ -103,8 +103,10 @@ export const useSutujeonStore = create<SutujeonState>((set, get) => ({
 
     // Check if trick is over
     if (newActions.length === 4) {
-      set({ gamePhase: 'TRICK_EVAL' });
-      setTimeout(() => get().evaluateTrick(), 1500);
+      setTimeout(() => {
+        set({ gamePhase: 'TRICK_EVAL' });
+        setTimeout(() => get().evaluateTrick(), 1500);
+      }, 1000);
     } else {
       // Trigger next bot if applicable
       const nextPlayer = get().players[get().currentPlayerIndex];

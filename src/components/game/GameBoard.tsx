@@ -8,8 +8,10 @@ import Button from '@/components/ui/Button';
 import RuleHelper from './RuleHelper';
 import Modal from '@/components/ui/Modal';
 import VictoryEffect from '@/components/ui/VictoryEffect';
+import { useRouter } from 'next/navigation';
 
 export default function GameBoard() {
+  const router = useRouter();
   const {
     players,
     gamePhase,
@@ -28,6 +30,7 @@ export default function GameBoard() {
   const botPlayer = players.find((p) => p.isBot);
 
   const [isHwangModalOpen, setIsHwangModalOpen] = useState(false);
+  const [showRuleHelper, setShowRuleHelper] = useState(false);
 
   // Validate human's selection
   const selectedSum = useMemo(() => {
@@ -42,12 +45,10 @@ export default function GameBoard() {
     humanPlayer.selectedCardIds.length === 3 &&
     selectedSum % 10 === 0;
 
-  // Auto-transition: SHOWDOWN → RESULT after a delay
+  // Auto-transition: SHOWDOWN → RESULT
   useEffect(() => {
     if (gamePhase === 'SHOWDOWN') {
-      const timer = setTimeout(() => {
-        evaluateHands();
-      }, 2000);
+      const timer = setTimeout(() => evaluateHands(), 2000);
       return () => clearTimeout(timer);
     }
   }, [gamePhase, evaluateHands]);
@@ -55,23 +56,17 @@ export default function GameBoard() {
   // Auto-start next round after 10 seconds in RESULT
   useEffect(() => {
     if (gamePhase === 'RESULT') {
-      const timer = setTimeout(() => {
-        nextRound();
-      }, 10000);
+      const timer = setTimeout(() => nextRound(), 10000);
       return () => clearTimeout(timer);
     }
   }, [gamePhase, nextRound]);
 
   const handleConfirm = useCallback(() => {
-    if (humanPlayer && canConfirm) {
-      confirmCombination(humanPlayer.id);
-    }
+    if (humanPlayer && canConfirm) confirmCombination(humanPlayer.id);
   }, [humanPlayer, canConfirm, confirmCombination]);
 
   const handleHwang = useCallback(() => {
-    if (humanPlayer) {
-      setIsHwangModalOpen(true);
-    }
+    if (humanPlayer) setIsHwangModalOpen(true);
   }, [humanPlayer]);
 
   const confirmHwang = useCallback(() => {
@@ -80,10 +75,6 @@ export default function GameBoard() {
       setIsHwangModalOpen(false);
     }
   }, [humanPlayer, declareHwang]);
-
-  const cancelHwang = useCallback(() => {
-    setIsHwangModalOpen(false);
-  }, []);
 
   const handleCardClick = useCallback(
     (cardId: string) => {
@@ -95,45 +86,71 @@ export default function GameBoard() {
   );
 
   return (
-    <div className="table-felt min-h-[100dvh] flex flex-col items-center justify-between py-3 px-3 sm:py-6 sm:px-4 relative overflow-hidden">
-      <RuleHelper />
-      <VictoryEffect 
-        type={gamePhase === 'RESULT' ? (winnerId === humanPlayer?.id ? 'VICTORY' : (winnerId === 'DRAW' ? 'DRAW' : 'DEFEAT')) : null}
+    <div className="table-felt min-h-[100dvh] flex flex-col relative overflow-hidden">
+      {/* ── Victory Effect Overlay ── */}
+      <VictoryEffect
+        type={
+          gamePhase === 'RESULT'
+            ? winnerId === humanPlayer?.id
+              ? 'VICTORY'
+              : winnerId === 'DRAW'
+              ? 'DRAW'
+              : 'DEFEAT'
+            : null
+        }
       />
 
-      {/* ── Ambient decorations ── */}
-      <div
-        className="absolute top-0 left-1/2 -translate-x-1/2 w-[400px] sm:w-[600px] h-[200px] sm:h-[300px] pointer-events-none"
-        style={{
-          background: 'radial-gradient(ellipse, rgba(200,169,110,0.06) 0%, transparent 70%)',
-        }}
-      />
-
-      {/* ── Round / Bet info ── */}
-      <div className="absolute top-14 sm:top-4 left-1/2 -translate-x-1/2 flex items-center gap-3 sm:gap-6 z-10">
-        <div
-          className="glass-panel px-3 sm:px-4 py-1.5 sm:py-2 flex items-center gap-2 text-xs sm:text-sm"
-          style={{ color: 'var(--tujeon-cream-dim)' }}
+      {/* ══════════════════════════════════════════════
+          STATUS BAR — Top fixed
+          ══════════════════════════════════════════════ */}
+      <div className="status-bar">
+        <button
+          onClick={() => {
+            resetGame();
+            router.push('/');
+          }}
+          className="status-bar-back"
+          aria-label="홈으로"
         >
+          ←
+        </button>
+
+        <div className="status-bar-item">
           <span style={{ fontFamily: 'var(--font-serif)' }}>라운드</span>
-          <span className="font-bold text-sm sm:text-base" style={{ color: 'var(--tujeon-gold)' }}>
-            {roundNumber}
-          </span>
+          <span className="status-bar-value">{roundNumber}</span>
         </div>
-        <div
-          className="glass-panel px-3 sm:px-4 py-1.5 sm:py-2 flex items-center gap-2 text-xs sm:text-sm"
-          style={{ color: 'var(--tujeon-cream-dim)' }}
-        >
+
+        <div className="w-px h-4 bg-white/10" />
+
+        <div className="status-bar-item">
           <span style={{ fontFamily: 'var(--font-serif)' }}>판돈</span>
-          <span className="font-bold text-sm sm:text-base" style={{ color: 'var(--tujeon-gold)' }}>
-            {betAmount * players.length}
-          </span>
+          <span className="status-bar-value">{betAmount * players.length}</span>
         </div>
+
+        <div className="flex-1" />
+
+        {humanPlayer && (
+          <div className="status-bar-item">
+            <span style={{ fontFamily: 'var(--font-serif)' }}>💰</span>
+            <span className="status-bar-value">{humanPlayer.score.toLocaleString('en-US')}</span>
+          </div>
+        )}
+
+        <button
+          onClick={() => setShowRuleHelper(true)}
+          className="status-bar-back"
+          aria-label="규칙 도우미"
+          style={{ fontSize: '0.9rem' }}
+        >
+          ?
+        </button>
       </div>
 
-      {/* ── Opponent (top) ── */}
+      {/* ══════════════════════════════════════════════
+          OPPONENT AREA — Top (compact)
+          ══════════════════════════════════════════════ */}
       {botPlayer && (
-        <div className="mt-20 sm:mt-16">
+        <div className="pt-[calc(44px+env(safe-area-inset-top)+12px)] px-3 sm:px-6">
           <PlayerSlot
             player={botPlayer}
             showCards={gamePhase === 'SHOWDOWN' || gamePhase === 'RESULT'}
@@ -144,37 +161,35 @@ export default function GameBoard() {
         </div>
       )}
 
-      {/* ── Center area — fixed height to prevent layout shift ── */}
-      <div className="flex flex-col items-center justify-center gap-2 sm:gap-4 my-2 sm:my-6" style={{ minHeight: '180px' }}>
-        {/* Phase indicator */}
+      {/* ══════════════════════════════════════════════
+          CENTER TABLE AREA
+          ══════════════════════════════════════════════ */}
+      <div className="flex-1 flex flex-col items-center justify-center gap-3 px-4 min-h-[140px]">
+        {/* Phase message */}
         <div
-          className="text-sm sm:text-lg font-bold anim-fade-up text-center px-4"
+          className="text-sm sm:text-base font-bold text-center anim-phase-in"
           style={{ fontFamily: 'var(--font-serif)', color: 'var(--tujeon-gold)' }}
           key={gamePhase}
         >
+          {gamePhase === 'DEAL' && '카드 배분 중...'}
           {gamePhase === 'MAKE_COMBINATION' && '3장을 골라 집을 지으세요'}
           {gamePhase === 'SHOWDOWN' && '패 공개 중...'}
         </div>
 
-        {/* Showdown result — compact, fits within center area */}
-        {gamePhase === 'RESULT' && (
-          <JokboDisplay players={players} winnerId={winnerId} />
-        )}
-
-        {/* Deck visual (center) */}
+        {/* Deck visual */}
         {gamePhase === 'MAKE_COMBINATION' && (
-          <div className="flex items-center gap-3">
-            <div className="relative w-12 h-18 sm:w-16 sm:h-24">
+          <div className="flex items-center gap-3 anim-fade-up">
+            <div className="relative" style={{ width: 44, height: 66 }}>
               {[0, 1, 2].map((i) => (
                 <div
                   key={i}
                   className="absolute rounded-md"
                   style={{
-                    width: 48,
-                    height: 72,
+                    width: 40,
+                    height: 60,
                     top: i * 2,
                     left: i * 2,
-                    background: 'linear-gradient(135deg, var(--tujeon-red) 0%, #6b1a1a 100%)',
+                    background: 'linear-gradient(135deg, #4a1520 0%, #1a2a4a 100%)',
                     border: '2px solid var(--tujeon-gold-dim)',
                     borderRadius: 'var(--card-radius)',
                     boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
@@ -185,48 +200,17 @@ export default function GameBoard() {
           </div>
         )}
 
-        {/* Action buttons — always in the same position */}
-        <div className="flex flex-col sm:flex-row gap-2 sm:gap-4 w-full px-4 sm:px-0 sm:w-auto">
-          {gamePhase === 'MAKE_COMBINATION' && (
-            <>
-              <Button
-                onClick={handleConfirm}
-                disabled={!canConfirm}
-                size="lg"
-              >
-                집 짓기 확인
-              </Button>
-              <Button
-                onClick={handleHwang}
-                variant="secondary"
-                size="lg"
-              >
-                황 선언
-              </Button>
-            </>
-          )}
-
-          {gamePhase === 'RESULT' && (
-            <div className="flex flex-col gap-2 items-center">
-              <div className="flex gap-2">
-                <Button onClick={nextRound} size="md">
-                  다음 라운드 →
-                </Button>
-                <Button variant="secondary" onClick={resetGame} size="md">
-                  메뉴로 돌아가기
-                </Button>
-              </div>
-              <span className="text-xs" style={{ color: 'var(--tujeon-cream-dim)' }}>
-                (10초 후 자동 시작)
-              </span>
-            </div>
-          )}
-        </div>
+        {/* Result display */}
+        {gamePhase === 'RESULT' && (
+          <JokboDisplay players={players} winnerId={winnerId} />
+        )}
       </div>
 
-      {/* ── Human player (bottom) ── */}
+      {/* ══════════════════════════════════════════════
+          MY HAND AREA — Bottom
+          ══════════════════════════════════════════════ */}
       {humanPlayer && (
-        <div className="mb-2 sm:mb-4 w-full max-w-lg">
+        <div className="px-3 sm:px-6 pb-3">
           <PlayerSlot
             player={humanPlayer}
             isCurrentPlayer={gamePhase === 'MAKE_COMBINATION'}
@@ -239,17 +223,56 @@ export default function GameBoard() {
         </div>
       )}
 
-      {/* Hwang Declaration Modal */}
-      <Modal isOpen={isHwangModalOpen} onClose={cancelHwang} title="황 선언">
-        <p className="mb-4 sm:mb-6 text-sm sm:text-lg" style={{ color: 'var(--tujeon-cream)' }}>
-          정말 10을 만들 조합이 없습니까?<br/>
-          <span style={{ color: 'var(--tujeon-red)' }}>황을 선언하면 이번 라운드에서 패배합니다.</span>
+      {/* ══════════════════════════════════════════════
+          ACTION DOCK — Bottom fixed
+          ══════════════════════════════════════════════ */}
+      {(gamePhase === 'MAKE_COMBINATION' || gamePhase === 'SHOWDOWN') && (
+        <div className="action-dock">
+          <Button
+            onClick={handleConfirm}
+            disabled={gamePhase === 'SHOWDOWN' || !canConfirm}
+            size="md"
+            className="flex-1 max-w-[200px]"
+          >
+            {gamePhase === 'SHOWDOWN' ? '패 공개 중...' : '집 짓기 확인'}
+          </Button>
+          <Button
+            onClick={handleHwang}
+            disabled={gamePhase === 'SHOWDOWN'}
+            variant="danger"
+            size="md"
+            className="max-w-[140px]"
+          >
+            황 선언
+          </Button>
+        </div>
+      )}
+
+      {gamePhase === 'RESULT' && (
+        <div className="action-dock">
+          <Button onClick={nextRound} size="md" className="flex-1 max-w-[220px]">
+            다음 라운드
+          </Button>
+        </div>
+      )}
+
+      {/* Spacer for action dock - stable and permanent */}
+      <div style={{ height: 'calc(52px + env(safe-area-inset-bottom))' }} />
+
+      {/* ── Hwang Modal ── */}
+      <Modal isOpen={isHwangModalOpen} onClose={() => setIsHwangModalOpen(false)} title="황 선언" bottomSheet>
+        <p className="mb-5 text-sm" style={{ color: 'var(--tujeon-cream)' }}>
+          정말 10의 배수를 만들 수 있는 조합이 없습니까?<br />
+          <span style={{ color: 'var(--tujeon-red-light)' }}>황을 선언하면 이번 라운드에서 패배합니다.</span>
         </p>
-        <div className="flex gap-3 sm:gap-4 justify-end">
-          <Button variant="secondary" onClick={cancelHwang}>취소</Button>
-          <Button onClick={confirmHwang}>선언하기</Button>
+        <div className="flex gap-3 justify-end">
+          <Button variant="secondary" onClick={() => setIsHwangModalOpen(false)}>취소</Button>
+          <Button variant="danger" onClick={confirmHwang}>선언하기</Button>
         </div>
       </Modal>
+
+      {/* ── Rule Helper (Bottom Sheet) ── */}
+      <RuleHelper isOpen={showRuleHelper} onClose={() => setShowRuleHelper(false)} />
     </div>
   );
 }

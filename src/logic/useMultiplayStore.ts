@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { ref, onValue, set as firebaseSet, remove as firebaseRemove, update, get as firebaseGet, child, push, off, onDisconnect } from 'firebase/database';
 import { getFirebaseDb, loginAnonymously } from '@/lib/firebase';
 import { Card, GameMode, SUIT_INFO } from '@/types/game';
-import { evaluateDolryeodaegiHand, compareHands } from './engine/dolryeodaegi';
+import { evaluateDolryeodaegiHand, compareHands, calculateJokbo } from './engine/dolryeodaegi';
 
 // ============================================================
 // Multiplay State Types (Reflecting RTDB Schema)
@@ -24,6 +24,12 @@ export interface RTDBGameState {
   showdownHands?: Record<string, string[]>; // For Gagu
   sutujeonTrickActions?: { playerId: string; cardId: string }[]; // For Sutujeon
   sutujeonTotalTricks?: number; // For Sutujeon
+  // ── For Gagupan ──
+  gagupanSpots?: Record<string, { cards: string[]; score: number }>;
+  gagupanBanker?: { cards: string[]; score: number };
+  gagupanBets?: Record<string, Record<string, number>>; // { [spotId]: { [playerId]: betAmount } }
+  gagupanWinnerResults?: Record<string, 'WIN' | 'LOSE' | 'DRAW'>;
+  gagupanConfirmedPlayers?: Record<string, boolean>;
 }
 
 export interface RTDBPublicPlayer {
@@ -74,6 +80,14 @@ export interface MultiplayState {
   endTurn: (nextUserId: string) => Promise<void>;
   updateGameState: (newState: Partial<RTDBGameState>) => Promise<void>;
   startNextRound: () => Promise<void>;
+
+  // Gagupan Actions
+  placeBetGagupan: (spotId: string, amount: number) => Promise<void>;
+  clearBetsGagupan: () => Promise<void>;
+  confirmBetsGagupan: () => Promise<void>;
+  dealGagupan: () => Promise<void>;
+  processDrawsGagupan: () => Promise<void>;
+  evaluateGagupanShowdown: () => Promise<void>;
 }
 
 // ============================================================
@@ -397,8 +411,28 @@ export const useMultiplayStore = create<MultiplayState>((set, get) => ({
   },
 
   startNextRound: async () => {
-    const { isHost, publicPlayers, roomConfig, dealCardsToPlayers } = get();
+    const { isHost, publicPlayers, roomConfig, dealCardsToPlayers, roomId } = get();
     if (!isHost || !roomConfig) return;
+
+    if (roomConfig.gameMode === 'GAGUPAN') {
+      const db = getFirebaseDb();
+      const updates: Record<string, any> = {};
+      updates[`rooms/${roomId}/gameState/phase`] = 'BETTING';
+      updates[`rooms/${roomId}/gameState/deck`] = null;
+      updates[`rooms/${roomId}/gameState/gagupanSpots`] = null;
+      updates[`rooms/${roomId}/gameState/gagupanBanker`] = null;
+      updates[`rooms/${roomId}/gameState/gagupanBets`] = null;
+      updates[`rooms/${roomId}/gameState/gagupanWinnerResults`] = null;
+      updates[`rooms/${roomId}/gameState/gagupanConfirmedPlayers`] = null;
+      
+      // Reset cardCount to 0 for all players
+      Object.keys(publicPlayers).forEach((uid) => {
+        updates[`rooms/${roomId}/publicPlayers/${uid}/cardCount`] = 0;
+      });
+
+      await update(ref(db), updates);
+      return;
+    }
 
     // Determine the number of cards per player
     let numCards = 2; // Default for GAGU
@@ -631,7 +665,54 @@ export const useMultiplayStore = create<MultiplayState>((set, get) => ({
         const parts = cardId.split('_');
         return { id: cardId, suit: parts[0] as any, rank: parseInt(parts[1], 10), imageUrl: '' };
       });
-      evaluations[uid] = evaluateDolryeodaegiHand(cards);
+
+      const confirmedVal = (gameState as any)?.[`confirmed_${uid}`] as string | undefined;
+      let evaluation: any;
+
+      if (!confirmedVal || confirmedVal === 'HWANG') {
+        // 황 선언 또는 제출 없음
+        evaluation = {
+          isHwang: true,
+          combination3: [],
+          remaining2: cards.slice(0, 2),
+          jokboType: 'MANG',
+          jokboScore: -1,
+          jokboLabel: '황',
+        };
+      } else {
+        const confirmedIds = confirmedVal.split(',');
+        const combo3 = cards.filter(c => confirmedIds.includes(c.id));
+        const sum3 = combo3.reduce((acc, c) => acc + c.rank, 0);
+
+        if (combo3.length === 3 && sum3 % 10 === 0) {
+          const remaining2 = cards.filter(c => !confirmedIds.includes(c.id));
+          if (remaining2.length === 2) {
+            const jokbo = calculateJokbo(remaining2[0], remaining2[1]);
+            evaluation = {
+              isHwang: false,
+              combination3: combo3,
+              remaining2,
+              jokboType: jokbo.jokboType,
+              jokboScore: jokbo.jokboScore,
+              jokboLabel: jokbo.jokboLabel,
+            };
+          } else {
+            evaluation = evaluateDolryeodaegiHand(cards);
+          }
+        } else {
+          // 잘못된 집 짓기 (합이 10의 배수가 아님) -> 황 처리
+          evaluation = {
+            isHwang: true,
+            combination3: [],
+            remaining2: cards.slice(0, 2),
+            jokboType: 'MANG',
+            jokboScore: -1,
+            jokboLabel: '황',
+          };
+        }
+      }
+
+      evaluations[uid] = evaluation;
     });
 
     let bestIdx = 0;
@@ -685,18 +766,24 @@ export const useMultiplayStore = create<MultiplayState>((set, get) => ({
     }
 
     if (newActions.length === 4) {
-      // Trick is over, go to eval phase
-      updates[`rooms/${roomId}/gameState/phase`] = 'TRICK_EVAL';
+      // Trick is over, block additional turns immediately
       updates[`rooms/${roomId}/gameState/currentTurn`] = null;
+      await update(ref(db), updates);
+
+      // Transition phase to TRICK_EVAL after 1000ms to allow card animation to settle
+      setTimeout(async () => {
+        const evalUpdates: Record<string, any> = {};
+        evalUpdates[`rooms/${roomId}/gameState/phase`] = 'TRICK_EVAL';
+        await update(ref(db), evalUpdates);
+      }, 1000);
     } else {
       // Pass turn to next player
       const players = Object.keys(publicPlayers).sort();
       const myIdx = players.indexOf(myId);
       const nextTurn = players[(myIdx + 1) % 4];
       updates[`rooms/${roomId}/gameState/currentTurn`] = nextTurn;
+      await update(ref(db), updates);
     }
-
-    await update(ref(db), updates);
   },
 
   evaluateSutujeonTrick: async () => {
@@ -765,6 +852,273 @@ export const useMultiplayStore = create<MultiplayState>((set, get) => ({
       updates[`rooms/${roomId}/gameState/ledSuit`] = null;
       updates[`rooms/${roomId}/gameState/sutujeonTrickActions`] = [];
     }
+
+    await update(ref(db), updates);
+  },
+
+  // ── Gagupan Multiplay Actions ──
+
+  placeBetGagupan: async (spotId, amount) => {
+    const { roomId, myId, publicPlayers, gameState } = get();
+    if (!roomId || !myId || !gameState || gameState.phase !== 'BETTING') return;
+
+    const db = getFirebaseDb();
+    const currentScore = publicPlayers[myId]?.score || 0;
+    if (currentScore < amount) return; // 자금 부족
+
+    // 플레이어 점수 차감
+    const newScore = currentScore - amount;
+
+    // 해당 Spot의 내 배팅 조회 후 갱신
+    const currentSpotBet = gameState.gagupanBets?.[spotId]?.[myId] || 0;
+    const newSpotBet = currentSpotBet + amount;
+
+    const updates: Record<string, any> = {};
+    updates[`rooms/${roomId}/publicPlayers/${myId}/score`] = newScore;
+    updates[`rooms/${roomId}/gameState/gagupanBets/${spotId}/${myId}`] = newSpotBet;
+
+    await update(ref(db), updates);
+  },
+
+  clearBetsGagupan: async () => {
+    const { roomId, myId, publicPlayers, gameState } = get();
+    if (!roomId || !myId || !gameState || gameState.phase !== 'BETTING') return;
+
+    const db = getFirebaseDb();
+    let refundAmount = 0;
+
+    const updates: Record<string, any> = {};
+    const spots: ('DONG' | 'SEO' | 'NAM')[] = ['DONG', 'SEO', 'NAM'];
+
+    spots.forEach((spotId) => {
+      const myBet = gameState.gagupanBets?.[spotId]?.[myId] || 0;
+      if (myBet > 0) {
+        refundAmount += myBet;
+        updates[`rooms/${roomId}/gameState/gagupanBets/${spotId}/${myId}`] = null;
+      }
+    });
+
+    if (refundAmount === 0) return;
+
+    const currentScore = publicPlayers[myId]?.score || 0;
+    updates[`rooms/${roomId}/publicPlayers/${myId}/score`] = currentScore + refundAmount;
+
+    await update(ref(db), updates);
+  },
+
+  confirmBetsGagupan: async () => {
+    const { roomId, myId, gameState } = get();
+    if (!roomId || !myId || !gameState || gameState.phase !== 'BETTING') return;
+
+    const db = getFirebaseDb();
+    const updates: Record<string, any> = {};
+    updates[`rooms/${roomId}/gameState/gagupanConfirmedPlayers/${myId}`] = true;
+
+    await update(ref(db), updates);
+  },
+
+  dealGagupan: async () => {
+    const { roomId, isHost, gameState } = get();
+    if (!roomId || !isHost || !gameState || gameState.phase !== 'BETTING') return;
+
+    // 베팅이 하나라도 존재하는지 검증
+    const hasBet = gameState.gagupanBets && Object.values(gameState.gagupanBets).some(
+      (spotBets) => Object.values(spotBets).some((amount) => amount > 0)
+    );
+
+    if (!hasBet) {
+      console.warn("No bets placed, cannot start deal");
+      return;
+    }
+
+    const { createDeck, shuffleDeck, dealFromDeck } = await import('@/data/deck');
+    let deck = shuffleDeck(createDeck(40));
+
+    const spotIds = ['DONG', 'SEO', 'NAM'];
+    const gagupanSpots: Record<string, { cards: string[]; score: number }> = {};
+
+    // 1. 구역별 2장 분배
+    spotIds.forEach((spotId) => {
+      const { dealt, remaining } = dealFromDeck(deck, 2);
+      deck = remaining;
+      const sum = dealt.reduce((acc, c) => acc + c.rank, 0);
+      gagupanSpots[spotId] = {
+        cards: dealt.map((c) => c.id),
+        score: sum % 10,
+      };
+    });
+
+    // 2. 뱅커 2장 분배
+    const bankerDeal = dealFromDeck(deck, 2);
+    deck = bankerDeal.remaining;
+    const bankerSum = bankerDeal.dealt.reduce((acc, c) => acc + c.rank, 0);
+    const gagupanBanker = {
+      cards: bankerDeal.dealt.map((c) => c.id),
+      score: bankerSum % 10,
+    };
+
+    const db = getFirebaseDb();
+    const updates: Record<string, any> = {};
+    updates[`rooms/${roomId}/gameState/deck`] = deck.map((c) => c.id);
+    updates[`rooms/${roomId}/gameState/gagupanSpots`] = gagupanSpots;
+    updates[`rooms/${roomId}/gameState/gagupanBanker`] = gagupanBanker;
+    updates[`rooms/${roomId}/gameState/phase`] = 'DRAW_PHASE';
+
+    await update(ref(db), updates);
+
+    // 자동 추가 카드 징구 단계 실행 (비동기)
+    setTimeout(() => {
+      get().processDrawsGagupan();
+    }, 1000);
+  },
+
+  processDrawsGagupan: async () => {
+    const { roomId, isHost } = get();
+    if (!roomId || !isHost) return;
+
+    const db = getFirebaseDb();
+    const { dealFromDeck } = await import('@/data/deck');
+
+    // 1. RTDB에서 최신 상태 스냅샷 가져오기
+    const snap = await firebaseGet(ref(db, `rooms/${roomId}/gameState`));
+    if (!snap.exists()) return;
+    const gameState = snap.val() as RTDBGameState;
+
+    let deckIds = [...(gameState.deck || [])];
+    const spots = { ...(gameState.gagupanSpots || {}) };
+    let banker = { ...(gameState.gagupanBanker || { cards: [], score: 0 }) };
+
+    const spotIds = ['DONG', 'SEO', 'NAM'];
+
+    // 동 -> 서 -> 남 순으로 드로우 검사 및 드로우
+    for (const spotId of spotIds) {
+      const spot = spots[spotId];
+      if (spot && spot.cards.length < 3 && spot.score <= 5 && deckIds.length > 0) {
+        const drawn = deckIds.shift()!;
+        const newCards = [...spot.cards, drawn];
+        const newSum = newCards.reduce((acc, cardId) => acc + parseInt(cardId.split('_')[1], 10), 0);
+        spots[spotId] = {
+          cards: newCards,
+          score: newSum % 10,
+        };
+
+        const updates: Record<string, any> = {};
+        updates[`rooms/${roomId}/gameState/deck`] = deckIds;
+        updates[`rooms/${roomId}/gameState/gagupanSpots`] = spots;
+        await update(ref(db), updates);
+
+        await new Promise((resolve) => setTimeout(resolve, 800));
+      }
+    }
+
+    // 뱅커(북) 추가 드로우
+    if (banker.cards.length < 3 && banker.score <= 5 && deckIds.length > 0) {
+      const drawn = deckIds.shift()!;
+      const newCards = [...banker.cards, drawn];
+      const newSum = newCards.reduce((acc, cardId) => acc + parseInt(cardId.split('_')[1], 10), 0);
+      banker = {
+        cards: newCards,
+        score: newSum % 10,
+      };
+
+      const updates: Record<string, any> = {};
+      updates[`rooms/${roomId}/gameState/deck`] = deckIds;
+      updates[`rooms/${roomId}/gameState/gagupanBanker`] = banker;
+      await update(ref(db), updates);
+
+      await new Promise((resolve) => setTimeout(resolve, 800));
+    }
+
+    // 결과 계산으로 진입
+    const finalUpdates: Record<string, any> = {};
+    finalUpdates[`rooms/${roomId}/gameState/phase`] = 'SETTLEMENT';
+    await update(ref(db), finalUpdates);
+
+    setTimeout(() => {
+      get().evaluateGagupanShowdown();
+    }, 1000);
+  },
+
+  evaluateGagupanShowdown: async () => {
+    const { roomId, isHost, myId, publicPlayers } = get();
+    if (!roomId || !isHost || !myId) return;
+
+    const db = getFirebaseDb();
+    const snap = await firebaseGet(ref(db, `rooms/${roomId}/gameState`));
+    if (!snap.exists()) return;
+    const gameState = snap.val() as RTDBGameState;
+
+    const spots = gameState.gagupanSpots;
+    const banker = gameState.gagupanBanker;
+    const bets = gameState.gagupanBets || {};
+
+    if (!spots || !banker) return;
+
+    const spotIds = ['DONG', 'SEO', 'NAM'];
+    const results: Record<string, 'WIN' | 'LOSE' | 'DRAW'> = {};
+
+    // 1. 승패 결과 계산
+    spotIds.forEach((spotId) => {
+      const spot = spots[spotId];
+      if (spot.score > banker.score) results[spotId] = 'WIN';
+      else if (spot.score < banker.score) results[spotId] = 'LOSE';
+      else results[spotId] = 'DRAW';
+    });
+
+    // 2. 칩 정산
+    // 방장(Host) = 물주(뱅커)
+    const updatedPlayers = { ...publicPlayers };
+    let hostBalanceChange = 0;
+
+    Object.entries(bets).forEach(([spotId, spotBets]) => {
+      const spotRes = results[spotId];
+      Object.entries(spotBets).forEach(([playerId, betAmount]) => {
+        if (!updatedPlayers[playerId]) return;
+
+        const playerPrevScore = updatedPlayers[playerId].score;
+
+        if (spotRes === 'WIN') {
+          // 플레이어 승리: 플레이어는 베팅금(원금) + 1배배당금을 방장에게서 받아감
+          // 베팅 시 이미 플레이어 지갑에서 베팅금(betAmount)이 차감되었으므로,
+          // 지갑 복구: playerPrevScore + 2 * betAmount
+          // 방장 손실: hostBalanceChange - betAmount
+          updatedPlayers[playerId] = {
+            ...updatedPlayers[playerId],
+            score: playerPrevScore + 2 * betAmount,
+          };
+          hostBalanceChange -= betAmount;
+        } else if (spotRes === 'LOSE') {
+          // 플레이어 패배: 베팅금 상실. 이미 베팅 시 지갑에서 빠졌으므로 플레이어 지갑 변동 없음.
+          // 방장 이득: hostBalanceChange + betAmount
+          hostBalanceChange += betAmount;
+        } else if (spotRes === 'DRAW') {
+          // 무승부: 플레이어 베팅금 원금 복구
+          // 지갑 복구: playerPrevScore + betAmount
+          // 방장 변동 없음
+          updatedPlayers[playerId] = {
+            ...updatedPlayers[playerId],
+            score: playerPrevScore + betAmount,
+          };
+        }
+      });
+    });
+
+    // 방장(Host) 점수 갱신 적용
+    if (updatedPlayers[myId]) {
+      updatedPlayers[myId] = {
+        ...updatedPlayers[myId],
+        score: Math.max(0, updatedPlayers[myId].score + hostBalanceChange),
+      };
+    }
+
+    const updates: Record<string, any> = {};
+    updates[`rooms/${roomId}/gameState/gagupanWinnerResults`] = results;
+    updates[`rooms/${roomId}/gameState/phase`] = 'RESULT';
+    
+    // 플레이어 점수들 업데이트
+    Object.keys(updatedPlayers).forEach((uid) => {
+      updates[`rooms/${roomId}/publicPlayers/${uid}/score`] = updatedPlayers[uid].score;
+    });
 
     await update(ref(db), updates);
   }

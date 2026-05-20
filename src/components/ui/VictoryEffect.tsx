@@ -1,157 +1,150 @@
 'use client';
 
-import React, { useRef } from 'react';
+import React, { useRef, useEffect, useMemo } from 'react';
 import gsap from 'gsap';
-import { useGSAP } from '@gsap/react';
 
-export type ResultType = 'VICTORY' | 'DEFEAT' | 'DRAW' | null;
-
-interface ResultEffectProps {
-  type: ResultType;
+interface VictoryEffectProps {
+  type: 'VICTORY' | 'DEFEAT' | 'DRAW' | null;
 }
 
-export default function ResultEffect({ type }: ResultEffectProps) {
+export default function VictoryEffect({ type }: VictoryEffectProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const textRef = useRef<HTMLHeadingElement>(null);
-  const particlesRef = useRef<HTMLDivElement>(null);
+  const textRef = useRef<HTMLDivElement>(null);
 
-  useGSAP(() => {
-    if (!type || !containerRef.current || !textRef.current || !particlesRef.current) return;
+  const particles = useMemo(() => {
+    if (type !== 'VICTORY') return [];
+    return Array.from({ length: 24 }, (_, i) => ({
+      id: i,
+      shape: i % 3 === 0 ? '◆' : i % 3 === 1 ? '★' : '●',
+    }));
+  }, [type]);
 
-    if (type === 'VICTORY') {
-      // 1. Text Animation: Scale up with elastic bounce and glow
-      gsap.fromTo(
-        textRef.current,
-        { scale: 0, opacity: 0, rotation: -10 },
-        {
-          scale: 1,
-          opacity: 1,
-          rotation: 0,
-          duration: 1.2,
-          ease: 'elastic.out(1, 0.5)',
-        }
-      );
+  useEffect(() => {
+    if (!type || !containerRef.current || !textRef.current) return;
 
-      // 2. Continuous Glow Pulse on Text
-      gsap.to(textRef.current, {
-        textShadow: '0 0 30px rgba(255, 215, 0, 0.8), 0 0 60px rgba(200, 169, 110, 0.6)',
-        duration: 1.5,
-        repeat: -1,
-        yoyo: true,
-        ease: 'sine.inOut',
-        delay: 0.5,
-      });
-
-      // 3. Particles Burst
-      const particles = Array.from(particlesRef.current.children);
-      particles.forEach((particle) => {
-        const angle = Math.random() * Math.PI * 2;
-        const distance = 100 + Math.random() * 200;
-        
-        const x = Math.cos(angle) * distance;
-        const y = Math.sin(angle) * distance;
-
+    const ctx = gsap.context(() => {
+      // Text animation
+      if (type === 'VICTORY') {
         gsap.fromTo(
-          particle,
-          { x: 0, y: 0, scale: 0, opacity: 1, rotation: 0 },
-          {
-            x,
-            y,
-            scale: Math.random() * 0.8 + 0.4,
-            opacity: 0,
-            rotation: Math.random() * 360 - 180,
-            duration: 1 + Math.random() * 1.5,
-            ease: 'power3.out',
-            delay: Math.random() * 0.1,
-          }
+          textRef.current,
+          { scale: 0, opacity: 0, rotateZ: -5 },
+          { scale: 1, opacity: 1, rotateZ: 0, duration: 0.6, ease: 'elastic.out(1, 0.5)' }
         );
+      } else if (type === 'DEFEAT') {
+        gsap.fromTo(
+          textRef.current,
+          { y: -60, opacity: 0 },
+          { y: 0, opacity: 1, duration: 0.8, ease: 'bounce.out' }
+        );
+      } else {
+        gsap.fromTo(
+          textRef.current,
+          { scale: 0.5, opacity: 0 },
+          { scale: 1, opacity: 1, duration: 0.5, ease: 'power2.out' }
+        );
+      }
+
+      // Victory particles
+      if (type === 'VICTORY') {
+        const particleEls = containerRef.current?.querySelectorAll('.victory-particle');
+        particleEls?.forEach((el) => {
+          const angle = Math.random() * Math.PI * 2;
+          const dist = 80 + Math.random() * 160;
+          gsap.fromTo(
+            el,
+            { x: 0, y: 0, scale: 0, opacity: 1 },
+            {
+              x: Math.cos(angle) * dist,
+              y: Math.sin(angle) * dist,
+              scale: gsap.utils.random(0.5, 1.2),
+              opacity: 0,
+              rotation: gsap.utils.random(-180, 180),
+              duration: 1.2,
+              ease: 'power3.out',
+              delay: Math.random() * 0.2,
+            }
+          );
+        });
+      }
+
+      // Auto fade out
+      gsap.to(containerRef.current, {
+        opacity: 0,
+        duration: 0.5,
+        delay: type === 'VICTORY' ? 2.5 : 2,
+        ease: 'power2.in',
       });
-    } else if (type === 'DEFEAT') {
-      // Heavy drop effect for defeat
-      gsap.fromTo(
-        textRef.current,
-        { scale: 3, opacity: 0, y: -50 },
-        { scale: 1, opacity: 1, y: 0, duration: 0.5, ease: 'bounce.out' }
-      );
-    } else if (type === 'DRAW') {
-      // Smooth fade in for draw
-      gsap.fromTo(
-        textRef.current,
-        { scale: 0.8, opacity: 0 },
-        { scale: 1, opacity: 1, duration: 0.8, ease: 'power2.out' }
-      );
-    }
-  }, { dependencies: [type] });
+    }, containerRef);
+
+    return () => ctx.revert();
+  }, [type]);
 
   if (!type) return null;
 
-  let message = '';
-  let textStyle: React.CSSProperties = {
-    fontFamily: 'var(--font-serif)',
-    WebkitBackgroundClip: 'text',
-    WebkitTextFillColor: 'transparent',
+  const config = {
+    VICTORY: {
+      label: '승리',
+      gradient: 'linear-gradient(135deg, #ffd700, #ff8c00)',
+      color: '#ffd700',
+      glow: 'rgba(255, 215, 0, 0.4)',
+    },
+    DEFEAT: {
+      label: '패배',
+      gradient: 'linear-gradient(135deg, #b33a3a, #8b0000)',
+      color: '#b33a3a',
+      glow: 'rgba(179, 58, 58, 0.3)',
+    },
+    DRAW: {
+      label: '무승부',
+      gradient: 'linear-gradient(135deg, #888, #555)',
+      color: '#888',
+      glow: 'rgba(136, 136, 136, 0.3)',
+    },
   };
 
-  if (type === 'VICTORY') {
-    message = '승리!';
-    textStyle = {
-      ...textStyle,
-      color: 'var(--tujeon-gold-light)',
-      backgroundImage: 'linear-gradient(to bottom, #FFFDE4, var(--tujeon-gold))',
-      WebkitBackgroundClip: 'text',
-      WebkitTextFillColor: 'transparent',
-      textShadow: '0 0 20px rgba(200, 169, 110, 0.4)',
-    };
-  } else if (type === 'DEFEAT') {
-    message = '패배';
-    textStyle = {
-      ...textStyle,
-      color: '#ff6b6b',
-      backgroundImage: 'linear-gradient(to bottom, #ff9999, #cc0000)',
-      WebkitBackgroundClip: 'text',
-      WebkitTextFillColor: 'transparent',
-      textShadow: '0 4px 10px rgba(0, 0, 0, 0.5)',
-    };
-  } else if (type === 'DRAW') {
-    message = '무승부';
-    textStyle = {
-      ...textStyle,
-      color: '#aaaaaa',
-      backgroundImage: 'linear-gradient(to bottom, #ffffff, #888888)',
-      WebkitBackgroundClip: 'text',
-      WebkitTextFillColor: 'transparent',
-      textShadow: '0 2px 5px rgba(0, 0, 0, 0.5)',
-    };
-  }
+  const c = config[type];
 
   return (
-    <div 
-      ref={containerRef} 
-      className="absolute inset-0 z-40 flex items-center justify-center pointer-events-none overflow-hidden"
+    <div
+      ref={containerRef}
+      className="absolute inset-0 z-40 pointer-events-none flex items-center justify-center"
     >
-      {/* Particles Container (only for victory) */}
-      <div ref={particlesRef} className="absolute inset-0 flex items-center justify-center">
-        {type === 'VICTORY' && Array.from({ length: 30 }).map((_, i) => (
-          <div
-            key={i}
-            className="absolute w-3 h-3 rounded-full"
-            style={{
-              background: Math.random() > 0.5 ? 'var(--tujeon-gold)' : 'var(--tujeon-gold-light)',
-              boxShadow: '0 0 10px var(--tujeon-gold-dim)',
-              clipPath: Math.random() > 0.5 ? 'polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%)' : 'none',
-            }}
-          />
-        ))}
-      </div>
+      {/* Background dim */}
+      <div
+        className="absolute inset-0"
+        style={{ background: `radial-gradient(circle, ${c.glow} 0%, rgba(0,0,0,0.4) 100%)` }}
+      />
 
-      {/* Main Result Text */}
-      <h2
-        ref={textRef}
-        className="text-7xl font-black relative z-10 leading-normal py-4"
-        style={textStyle}
-      >
-        {message}
-      </h2>
+      {/* Particles */}
+      {particles.map((p) => (
+        <span
+          key={p.id}
+          className="victory-particle absolute text-xl"
+          style={{
+            color: '#ffd700',
+            textShadow: '0 0 8px rgba(255,215,0,0.5)',
+          }}
+        >
+          {p.shape}
+        </span>
+      ))}
+
+      {/* Main text */}
+      <div ref={textRef} className="flex flex-col items-center justify-center relative z-10">
+        <span
+          className="text-5xl sm:text-6xl font-black tracking-wider py-2 px-4"
+          style={{
+            fontFamily: 'var(--font-serif)',
+            background: c.gradient,
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            filter: `drop-shadow(0 4px 20px ${c.glow})`,
+            display: 'inline-block',
+          }}
+        >
+          {c.label}
+        </span>
+      </div>
     </div>
   );
 }

@@ -226,7 +226,7 @@ export default function MultiplayLobby({ onBack }: MultiplayLobbyProps = {}) {
           <div className="flex flex-col gap-3 w-full anim-fade-up">
 
             {/* ── Quick Match Section ── */}
-            <div className="glass-panel p-4 flex flex-col gap-3">
+            <div className="ink-panel p-4 flex flex-col gap-3">
               <div className="text-xs font-bold" style={{ color: 'var(--tujeon-gold-dim)', fontFamily: 'var(--font-serif)' }}>
                 닉네임 (선택)
               </div>
@@ -236,8 +236,8 @@ export default function MultiplayLobby({ onBack }: MultiplayLobbyProps = {}) {
                 onChange={(e) => setPlayerName(e.target.value)}
                 placeholder="익명의 투전자"
                 maxLength={10}
-                className="glass-panel px-4 py-2.5 text-sm bg-transparent outline-none"
-                style={{ color: 'var(--tujeon-cream)', borderColor: 'rgba(200,169,110,0.2)' }}
+                className="ink-panel px-4 py-2.5 text-sm bg-transparent outline-none w-full"
+                style={{ color: 'var(--tujeon-cream)', borderColor: 'rgba(200,169,110,0.15)' }}
               />
               <div className="text-xs font-bold" style={{ color: 'var(--tujeon-gold-dim)', fontFamily: 'var(--font-serif)' }}>
                 게임 모드
@@ -246,8 +246,8 @@ export default function MultiplayLobby({ onBack }: MultiplayLobbyProps = {}) {
                 {(['DOLRYEO_DAEGI', 'GAGU', 'SUTUJEON'] as GameMode[]).map((mode) => (
                   <button
                     key={mode}
-                    className={`glass-panel flex-1 px-2 py-2 text-xs sm:text-sm text-center transition-all ${
-                      mode === selectedMode ? 'ring-1 ring-yellow-600/40' : 'opacity-60'
+                    className={`ink-panel flex-1 px-2 py-2 text-xs sm:text-sm text-center transition-all ${
+                      mode === selectedMode ? 'ring-1 ring-yellow-600/40 scale-[1.02]' : 'opacity-60'
                     }`}
                     style={{ fontFamily: 'var(--font-serif)', color: 'var(--tujeon-gold-light)' }}
                     onClick={() => setSelectedMode(mode)}
@@ -302,8 +302,8 @@ export default function MultiplayLobby({ onBack }: MultiplayLobbyProps = {}) {
                 onChange={(e) => setPlayerName(e.target.value)}
                 placeholder="이름을 입력하세요"
                 maxLength={10}
-                className="glass-panel px-4 py-3 text-sm bg-transparent outline-none"
-                style={{ color: 'var(--tujeon-cream)', borderColor: 'rgba(200,169,110,0.2)' }}
+                className="ink-panel px-4 py-3 text-sm bg-transparent outline-none w-full"
+                style={{ color: 'var(--tujeon-cream)', borderColor: 'rgba(200,169,110,0.15)' }}
               />
             </div>
 
@@ -316,8 +316,8 @@ export default function MultiplayLobby({ onBack }: MultiplayLobbyProps = {}) {
                 {(['DOLRYEO_DAEGI', 'GAGU', 'SUTUJEON'] as GameMode[]).map((mode) => (
                   <button
                     key={mode}
-                    className={`glass-panel flex-1 px-3 py-2.5 text-sm text-center transition-all ${
-                      mode === selectedMode ? 'ring-1 ring-yellow-600/40' : 'opacity-60'
+                    className={`ink-panel flex-1 px-3 py-2.5 text-sm text-center transition-all ${
+                      mode === selectedMode ? 'ring-1 ring-yellow-600/40 scale-[1.02]' : 'opacity-60'
                     }`}
                     style={{ fontFamily: 'var(--font-serif)', color: 'var(--tujeon-gold-light)' }}
                     onClick={() => setSelectedMode(mode)}
@@ -337,8 +337,8 @@ export default function MultiplayLobby({ onBack }: MultiplayLobbyProps = {}) {
                   {[2, 3, 4].map((num) => (
                     <button
                       key={num}
-                      className={`glass-panel flex-1 px-3 py-2.5 text-sm text-center transition-all ${
-                        selectedMaxPlayers === num ? 'ring-1 ring-yellow-600/40' : 'opacity-60'
+                      className={`ink-panel flex-1 px-3 py-2.5 text-sm text-center transition-all ${
+                        selectedMaxPlayers === num ? 'ring-1 ring-yellow-600/40 scale-[1.02]' : 'opacity-60'
                       }`}
                       style={{ fontFamily: 'var(--font-serif)', color: 'var(--tujeon-gold-light)' }}
                       onClick={() => setSelectedMaxPlayers(num)}
@@ -379,8 +379,8 @@ export default function MultiplayLobby({ onBack }: MultiplayLobbyProps = {}) {
                 onChange={(e) => setPlayerName(e.target.value)}
                 placeholder="이름을 입력하세요"
                 maxLength={10}
-                className="glass-panel px-4 py-3 text-sm bg-transparent outline-none"
-                style={{ color: 'var(--tujeon-cream)', borderColor: 'rgba(200,169,110,0.2)' }}
+                className="ink-panel px-4 py-3 text-sm bg-transparent outline-none w-full"
+                style={{ color: 'var(--tujeon-cream)', borderColor: 'rgba(200,169,110,0.15)' }}
               />
             </div>
 
@@ -395,8 +395,8 @@ export default function MultiplayLobby({ onBack }: MultiplayLobbyProps = {}) {
                 onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
                 placeholder="방 코드를 입력하세요"
                 maxLength={6}
-                className="glass-panel px-4 py-3 text-sm bg-transparent outline-none font-mono tracking-widest uppercase"
-                style={{ color: 'var(--tujeon-cream)', borderColor: 'rgba(200,169,110,0.2)' }}
+                className="ink-panel px-4 py-3 text-sm bg-transparent outline-none font-mono tracking-widest uppercase w-full text-center"
+                style={{ color: 'var(--tujeon-cream)', borderColor: 'rgba(200,169,110,0.15)' }}
               />
             </div>
 
@@ -473,7 +473,7 @@ export default function MultiplayLobby({ onBack }: MultiplayLobbyProps = {}) {
         {step === 'WAITING' && (
           <div className="flex flex-col gap-5 w-full anim-fade-up">
             {/* Room Code Display */}
-            <div className="glass-panel p-4 text-center">
+            <div className="ink-panel p-5 text-center">
               <div className="text-[10px] uppercase tracking-wider mb-1.5" style={{ color: 'var(--tujeon-gold-dim)' }}>
                 방 코드
               </div>
@@ -535,7 +535,7 @@ export default function MultiplayLobby({ onBack }: MultiplayLobbyProps = {}) {
             </div>
 
             {!isHost && (
-              <div className="text-center text-xs anim-pulse-glow inline-block mx-auto px-4 py-2 rounded-full glass-panel" style={{ color: 'var(--tujeon-gold)' }}>
+              <div className="text-center text-xs anim-pulse-glow inline-block mx-auto px-4 py-2 rounded-full ink-panel" style={{ color: 'var(--tujeon-gold)' }}>
                 방장이 게임을 시작할 때까지 대기 중...
               </div>
             )}
