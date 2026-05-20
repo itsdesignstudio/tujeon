@@ -50,6 +50,7 @@ export interface MultiplayState {
   
   // Connection
   isMatchmaking: boolean;
+  _connectedUnsubscribe?: (() => void) | null;
 
   // Actions
   login: () => Promise<string>;
@@ -165,36 +166,57 @@ export const useMultiplayStore = create<MultiplayState>((set, get) => ({
     }
 
     const config: RoomConfig = snapshot.val();
-
-    // Add self to public players if not already there
     const meRef = ref(db, `rooms/${roomId}/publicPlayers/${myId}`);
-    const meSnap = await firebaseGet(meRef);
-    if (!meSnap.exists()) {
-      await firebaseSet(meRef, {
-        name: playerName,
-        cardCount: 0,
-        score: 0,
-      });
-      // Initialize private hand
-      await firebaseSet(ref(db, `rooms/${roomId}/privatePlayers/${myId}/hand`), []);
-    }
 
-    // Automatically remove myself from publicPlayers when disconnected
-    onDisconnect(meRef).remove();
+    // ── Handle Presence and Reconnections ──
+    const connectedRef = ref(db, '.info/connected');
+    const connectedUnsubscribe = onValue(connectedRef, async (snap) => {
+      if (snap.val() === true) {
+        // Establish onDisconnect hook on the server side
+        onDisconnect(meRef).remove();
 
-    // Update matchmaking queue with new player count
-    const playersSnap = await firebaseGet(ref(db, `rooms/${roomId}/publicPlayers`));
-    const currentPlayers = playersSnap.exists() ? Object.keys(playersSnap.val()).length : 1;
-    const mmRef = ref(db, `matchmaking/${config.gameMode}/${roomId}`);
-    if (currentPlayers >= config.maxPlayers) {
-      // Room is full — remove from matchmaking
-      await firebaseRemove(mmRef);
-    } else {
-      // Update player count
-      await update(mmRef, { currentPlayers });
-    }
+        // Check if room config still exists (it might have been deleted)
+        const roomConfigSnap = await firebaseGet(child(ref(db), `rooms/${roomId}/config`));
+        if (!roomConfigSnap.exists()) {
+          get().leaveRoom();
+          return;
+        }
 
-    set({ roomId, myId, isMatchmaking: false });
+        // Add self to public players if missing
+        const meSnap = await firebaseGet(meRef);
+        if (!meSnap.exists()) {
+          await firebaseSet(meRef, {
+            name: playerName,
+            cardCount: 0,
+            score: 0,
+          });
+
+          // Initialize private hand if missing
+          const myHandRef = ref(db, `rooms/${roomId}/privatePlayers/${myId}/hand`);
+          const handSnap = await firebaseGet(myHandRef);
+          if (!handSnap.exists()) {
+            await firebaseSet(myHandRef, []);
+          }
+
+          // Update matchmaking queue with new player count
+          const playersSnap = await firebaseGet(ref(db, `rooms/${roomId}/publicPlayers`));
+          const currentPlayers = playersSnap.exists() ? Object.keys(playersSnap.val()).length : 1;
+          const mmRef = ref(db, `matchmaking/${config.gameMode}/${roomId}`);
+          
+          if (currentPlayers >= config.maxPlayers) {
+            await firebaseRemove(mmRef);
+          } else {
+            // Only update queue if we are still in LOBBY phase
+            const phaseSnap = await firebaseGet(ref(db, `rooms/${roomId}/gameState/phase`));
+            if (!phaseSnap.exists() || phaseSnap.val() === 'LOBBY') {
+              await update(mmRef, { currentPlayers });
+            }
+          }
+        }
+      }
+    });
+
+    set({ roomId, myId, isMatchmaking: false, _connectedUnsubscribe: connectedUnsubscribe });
 
     // Setup Listeners
     const configRef = ref(db, `rooms/${roomId}/config`);
@@ -257,8 +279,12 @@ export const useMultiplayStore = create<MultiplayState>((set, get) => ({
   },
 
   leaveRoom: () => {
-    const { roomId, myId, isHost, roomConfig } = get();
+    const { roomId, myId, isHost, roomConfig, _connectedUnsubscribe } = get();
     if (!roomId) return;
+
+    if (_connectedUnsubscribe) {
+      _connectedUnsubscribe();
+    }
 
     const db = getFirebaseDb();
     
@@ -291,6 +317,7 @@ export const useMultiplayStore = create<MultiplayState>((set, get) => ({
       gameState: null,
       publicPlayers: {},
       privateHand: [],
+      _connectedUnsubscribe: null,
     });
   },
 
