@@ -1,7 +1,8 @@
 import { create } from 'zustand';
 import { ref, onValue, set as firebaseSet, remove as firebaseRemove, update, get as firebaseGet, child, push, off, onDisconnect } from 'firebase/database';
 import { getFirebaseDb, loginAnonymously } from '@/lib/firebase';
-import { Card, GameMode } from '@/types/game';
+import { Card, GameMode, SUIT_INFO } from '@/types/game';
+import { evaluateDolryeodaegiHand, compareHands } from './engine/dolryeodaegi';
 
 // ============================================================
 // Multiplay State Types (Reflecting RTDB Schema)
@@ -69,8 +70,10 @@ export interface MultiplayState {
   evaluateGaguShowdown: () => Promise<void>;
   playCardSutujeon: (cardId: string) => Promise<void>;
   evaluateSutujeonTrick: () => Promise<void>;
+  evaluateDolryeodaegiShowdown: () => Promise<void>;
   endTurn: (nextUserId: string) => Promise<void>;
   updateGameState: (newState: Partial<RTDBGameState>) => Promise<void>;
+  startNextRound: () => Promise<void>;
 }
 
 // ============================================================
@@ -393,6 +396,50 @@ export const useMultiplayStore = create<MultiplayState>((set, get) => ({
     await update(ref(db), updates);
   },
 
+  startNextRound: async () => {
+    const { isHost, publicPlayers, roomConfig, dealCardsToPlayers } = get();
+    if (!isHost || !roomConfig) return;
+
+    // Determine the number of cards per player
+    let numCards = 2; // Default for GAGU
+    if (roomConfig.gameMode === 'SUTUJEON') numCards = 20;
+    else if (roomConfig.gameMode === 'DOLRYEO_DAEGI') numCards = 5;
+
+    // Create and shuffle deck
+    const { createDeck, shuffleDeck, dealFromDeck } = await import('@/data/deck');
+    let deck = shuffleDeck(createDeck(roomConfig.gameMode === 'SUTUJEON' ? 80 : 40));
+    const playersHands: Record<string, string[]> = {};
+    const gaguStatus: Record<string, { hasStood: boolean; score: number }> = {};
+    
+    // Cleanup old states like 'confirmed_' or 'sutujeonTrickActions'
+    // They get overridden or cleaned by dealCardsToPlayers mostly, 
+    // but for 'confirmed_' in Dolryeodaegi we should explicitly clear them via updateGameState
+    const clearConfirmed: Record<string, any> = {};
+
+    Object.keys(publicPlayers).forEach((uid) => {
+      const { dealt, remaining } = dealFromDeck(deck, numCards);
+      deck = remaining;
+      playersHands[uid] = dealt.map(c => c.id);
+      
+      const scoreSum = dealt.reduce((acc, c) => acc + c.rank, 0);
+      gaguStatus[uid] = { hasStood: false, score: scoreSum % 10 };
+      
+      if (roomConfig.gameMode === 'DOLRYEO_DAEGI') {
+        clearConfirmed[`confirmed_${uid}`] = null;
+      }
+    });
+
+    if (roomConfig.gameMode === 'DOLRYEO_DAEGI') {
+      await get().updateGameState(clearConfirmed);
+    }
+
+    await dealCardsToPlayers({
+      playersHands,
+      deck: deck.map(c => c.id),
+      gaguStatus
+    });
+  },
+
   playCard: async (cardId) => {
     const { roomId, myId, privateHand, gameState, publicPlayers } = get();
     if (!roomId || !myId || !gameState) return;
@@ -559,6 +606,54 @@ export const useMultiplayStore = create<MultiplayState>((set, get) => ({
       });
       updates[`rooms/${roomId}/gameState/showdownHands`] = showdownHands;
     }
+
+    await update(ref(db), updates);
+  },
+
+  evaluateDolryeodaegiShowdown: async () => {
+    const { roomId, isHost, gameState, publicPlayers } = get();
+    if (!roomId || !isHost || !gameState) return;
+
+    const db = getFirebaseDb();
+    
+    // Fetch private hands
+    const privatePlayersSnap = await firebaseGet(child(ref(db), `rooms/${roomId}/privatePlayers`));
+    if (!privatePlayersSnap.exists()) return;
+    const privatePlayers = privatePlayersSnap.val();
+
+    const uids = Object.keys(publicPlayers);
+    const showdownHands: Record<string, string[]> = {};
+    const evaluations: Record<string, any> = {};
+
+    uids.forEach(uid => {
+      showdownHands[uid] = privatePlayers[uid]?.hand || [];
+      const cards = showdownHands[uid].map(cardId => {
+        const parts = cardId.split('_');
+        return { id: cardId, suit: parts[0] as any, rank: parseInt(parts[1], 10), imageUrl: '' };
+      });
+      evaluations[uid] = evaluateDolryeodaegiHand(cards);
+    });
+
+    let bestIdx = 0;
+    let isDraw = false;
+    for (let i = 1; i < uids.length; i++) {
+      const evalA = evaluations[uids[bestIdx]];
+      const evalB = evaluations[uids[i]];
+      const comp = compareHands(evalB, evalA);
+      if (comp > 0) {
+        bestIdx = i;
+        isDraw = false;
+      } else if (comp === 0) {
+        isDraw = true;
+      }
+    }
+
+    let winnerId = isDraw ? 'DRAW' : uids[bestIdx];
+
+    const updates: Record<string, any> = {};
+    updates[`rooms/${roomId}/gameState/winnerId`] = winnerId;
+    updates[`rooms/${roomId}/gameState/phase`] = 'RESULT';
+    updates[`rooms/${roomId}/gameState/showdownHands`] = showdownHands;
 
     await update(ref(db), updates);
   },

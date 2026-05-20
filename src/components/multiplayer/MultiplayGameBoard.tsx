@@ -20,6 +20,7 @@ export default function MultiplayGameBoard() {
     isHost,
     playCard,
     updateGameState,
+    startNextRound,
   } = useMultiplayStore();
 
   const phase = gameState?.phase || 'LOBBY';
@@ -154,6 +155,25 @@ export default function MultiplayGameBoard() {
     }
   }, [isHost, phase, gameState, publicPlayers, updateGameState]);
 
+  // ── Host auto-evaluates showdown ──
+  React.useEffect(() => {
+    if (!isHost || phase !== 'SHOWDOWN') return;
+    const timer = setTimeout(() => {
+      useMultiplayStore.getState().evaluateDolryeodaegiShowdown?.();
+    }, 2500); // Wait 2.5s for players to see showdown
+    return () => clearTimeout(timer);
+  }, [isHost, phase]);
+
+  // ── Host auto-restarts after 10 seconds in RESULT ──
+  React.useEffect(() => {
+    if (isHost && phase === 'RESULT') {
+      const timer = setTimeout(() => {
+        startNextRound();
+      }, 10000);
+      return () => clearTimeout(timer);
+    }
+  }, [isHost, phase, startNextRound]);
+
   const OpponentInfo = ({ uid }: { uid: string }) => {
     const info = publicPlayers[uid];
     if (!info) return null;
@@ -255,7 +275,19 @@ export default function MultiplayGameBoard() {
           {phase === 'PLAYER_ACTION' && isMyTurn && '카드를 선택하세요'}
           {phase === 'PLAYER_ACTION' && !isMyTurn && '상대방의 턴입니다...'}
           {phase === 'SHOWDOWN' && '패 공개 중...'}
+          {phase === 'RESULT' && '게임 종료'}
         </div>
+
+        {phase === 'RESULT' && isHost && (
+          <div className="flex flex-col items-center gap-2 anim-fade-up mt-2">
+            <Button onClick={() => startNextRound()} size="lg">
+              다음 판 시작
+            </Button>
+            <span className="text-xs" style={{ color: 'var(--tujeon-cream-dim)' }}>
+              (10초 후 자동 시작)
+            </span>
+          </div>
+        )}
 
         {/* Selection status */}
         {selectedCardIds.length > 0 && (
@@ -291,7 +323,19 @@ export default function MultiplayGameBoard() {
       </div>
 
       {/* ── My Hand (bottom) ── */}
-      <div className="mb-2 sm:mb-4 w-full max-w-lg">
+      <div className="mb-2 sm:mb-4 w-full max-w-lg relative">
+        {/* Winner Overlay */}
+        {phase === 'RESULT' && gameState?.winnerId && (
+          <div className="absolute -top-24 left-1/2 -translate-x-1/2 z-50 whitespace-nowrap">
+            <div className="px-6 py-3 rounded-full glass-panel border-2 border-yellow-500/50 flex items-center gap-3 anim-fade-up"
+                 style={{ background: 'rgba(0,0,0,0.8)' }}>
+              <span className="text-2xl font-black" style={{ fontFamily: 'var(--font-serif)', color: 'var(--tujeon-gold)' }}>
+                {gameState.winnerId === 'DRAW' ? '무승부!' : (gameState.winnerId === myId ? '승리!' : '패배...')}
+              </span>
+            </div>
+          </div>
+        )}
+
         {myInfo && (
           <div className="glass-panel px-3 sm:px-5 py-2 sm:py-3 flex items-center gap-3 mb-2 justify-center">
             <div

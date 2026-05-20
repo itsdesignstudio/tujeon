@@ -288,23 +288,29 @@ export const useGameStore = create<GameState>((set, get) => ({
 
     // Find the player with the best hand
     let bestIdx = 0;
+    let isDraw = false;
     for (let i = 1; i < players.length; i++) {
       const evalA = players[bestIdx].evaluation;
       const evalB = players[i].evaluation;
       if (!evalA || !evalB) continue;
 
-      if (compareHands(evalB, evalA) > 0) {
+      const comp = compareHands(evalB, evalA);
+      if (comp > 0) {
         bestIdx = i;
+        isDraw = false;
+      } else if (comp === 0) {
+        isDraw = true;
       }
     }
 
     const pot = betAmount * players.length;
-    const winnerId = players[bestIdx].id;
+    let winnerId = isDraw ? 'DRAW' : players[bestIdx].id;
 
     // Award pot to winner
-    const updatedPlayers = players.map((p) =>
-      p.id === winnerId ? { ...p, score: p.score + pot } : p
-    );
+    const updatedPlayers = players.map((p) => {
+      if (isDraw) return { ...p, score: p.score + betAmount }; // Return bets on draw
+      return p.id === winnerId ? { ...p, score: p.score + pot } : p;
+    });
 
     set({
       players: updatedPlayers,

@@ -21,6 +21,7 @@ export default function MultiplayGaguBoard() {
     standGagu,
     evaluateGaguShowdown,
     updateGameState,
+    startNextRound,
   } = useMultiplayStore();
 
   const phase = gameState?.phase || 'LOBBY';
@@ -52,11 +53,22 @@ export default function MultiplayGaguBoard() {
   // Host evaluates showdown when all players have stood (phase transitions to SHOWDOWN)
   React.useEffect(() => {
     if (isHost && phase === 'SHOWDOWN') {
-      setTimeout(() => {
+      const timer = setTimeout(() => {
         evaluateGaguShowdown();
       }, 1500);
+      return () => clearTimeout(timer);
     }
   }, [isHost, phase, evaluateGaguShowdown]);
+
+  // Host auto-restarts after 10 seconds in RESULT
+  React.useEffect(() => {
+    if (isHost && phase === 'RESULT') {
+      const timer = setTimeout(() => {
+        startNextRound();
+      }, 10000);
+      return () => clearTimeout(timer);
+    }
+  }, [isHost, phase, startNextRound]);
 
   const isShowdown = phase === 'SHOWDOWN' || phase === 'RESULT';
 
@@ -188,7 +200,17 @@ export default function MultiplayGaguBoard() {
             </Button>
           </div>
         )}
-        {/* Removed table cards */}
+        
+        {phase === 'RESULT' && isHost && (
+          <div className="flex flex-col items-center gap-2 anim-fade-up">
+            <Button onClick={() => startNextRound()} size="lg">
+              다음 판 시작
+            </Button>
+            <span className="text-xs" style={{ color: 'var(--tujeon-cream-dim)' }}>
+              (10초 후 자동 시작)
+            </span>
+          </div>
+        )}
       </div>
 
       {/* ── My Hand (bottom) ── */}

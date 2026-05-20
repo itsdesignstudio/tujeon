@@ -19,6 +19,7 @@ export default function SutujeonBoard() {
     leadPlayerIndex,
     totalTricksPlayed,
     playCard,
+    dealCards,
     resetSutujeon,
   } = useSutujeonStore();
 
@@ -65,6 +66,16 @@ export default function SutujeonBoard() {
       playCard(humanPlayer.id, card.id);
     }
   };
+
+  // Auto-start next round after 10 seconds in RESULT
+  useEffect(() => {
+    if (gamePhase === 'RESULT') {
+      const timer = setTimeout(() => {
+        dealCards();
+      }, 10000);
+      return () => clearTimeout(timer);
+    }
+  }, [gamePhase, dealCards]);
 
   // ── Bot info helper ──
   const BotInfo = ({ bot, idx, className = '' }: { bot: typeof botLeft; idx: number; className?: string }) => (
@@ -151,7 +162,15 @@ export default function SutujeonBoard() {
                 </div>
               ))}
             </div>
-            <Button onClick={resetSutujeon} size="lg">다시 시작 / 메뉴로</Button>
+            <div className="flex flex-col gap-2 mt-4 items-center">
+              <div className="flex gap-2">
+                <Button onClick={dealCards} size="md">다음 판 시작</Button>
+                <Button variant="secondary" onClick={resetSutujeon} size="md">메뉴로</Button>
+              </div>
+              <span className="text-xs" style={{ color: 'var(--tujeon-cream-dim)' }}>
+                (10초 후 자동 시작)
+              </span>
+            </div>
           </div>
         </div>
       )}

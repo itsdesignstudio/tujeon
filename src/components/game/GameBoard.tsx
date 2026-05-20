@@ -52,6 +52,16 @@ export default function GameBoard() {
     }
   }, [gamePhase, evaluateHands]);
 
+  // Auto-start next round after 10 seconds in RESULT
+  useEffect(() => {
+    if (gamePhase === 'RESULT') {
+      const timer = setTimeout(() => {
+        nextRound();
+      }, 10000);
+      return () => clearTimeout(timer);
+    }
+  }, [gamePhase, nextRound]);
+
   const handleConfirm = useCallback(() => {
     if (humanPlayer && canConfirm) {
       confirmCombination(humanPlayer.id);
@@ -197,14 +207,19 @@ export default function GameBoard() {
           )}
 
           {gamePhase === 'RESULT' && (
-            <>
-              <Button onClick={nextRound} size="md">
-                다음 라운드 →
-              </Button>
-              <Button variant="secondary" onClick={resetGame} size="md">
-                메뉴로 돌아가기
-              </Button>
-            </>
+            <div className="flex flex-col gap-2 items-center">
+              <div className="flex gap-2">
+                <Button onClick={nextRound} size="md">
+                  다음 라운드 →
+                </Button>
+                <Button variant="secondary" onClick={resetGame} size="md">
+                  메뉴로 돌아가기
+                </Button>
+              </div>
+              <span className="text-xs" style={{ color: 'var(--tujeon-cream-dim)' }}>
+                (10초 후 자동 시작)
+              </span>
+            </div>
           )}
         </div>
       </div>

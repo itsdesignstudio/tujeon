@@ -39,6 +39,16 @@ export default function GaguBoard() {
 
   const isShowdown = gamePhase === 'SHOWDOWN' || gamePhase === 'RESULT';
 
+  // Auto-start next round after 10 seconds in RESULT
+  useEffect(() => {
+    if (gamePhase === 'RESULT') {
+      const timer = setTimeout(() => {
+        nextRound();
+      }, 10000);
+      return () => clearTimeout(timer);
+    }
+  }, [gamePhase, nextRound]);
+
   return (
     <div className="table-felt min-h-[100dvh] flex flex-col items-center justify-between py-3 px-3 sm:py-6 sm:px-4 relative overflow-hidden">
       <GaguRuleHelper />
@@ -116,14 +126,19 @@ export default function GaguBoard() {
           )}
 
           {gamePhase === 'RESULT' && (
-            <>
-              <Button onClick={nextRound} size="md">
-                다음 라운드 →
-              </Button>
-              <Button variant="secondary" onClick={resetGagu} size="md">
-                메뉴로 돌아가기
-              </Button>
-            </>
+            <div className="flex flex-col items-center gap-2">
+              <div className="flex gap-2">
+                <Button onClick={nextRound} size="md">
+                  다음 라운드 →
+                </Button>
+                <Button variant="secondary" onClick={resetGagu} size="md">
+                  메뉴로 돌아가기
+                </Button>
+              </div>
+              <span className="text-xs" style={{ color: 'var(--tujeon-cream-dim)' }}>
+                (10초 후 자동 시작)
+              </span>
+            </div>
           )}
         </div>
       </div>

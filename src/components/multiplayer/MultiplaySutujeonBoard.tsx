@@ -21,6 +21,7 @@ export default function MultiplaySutujeonBoard() {
     isHost,
     playCardSutujeon,
     evaluateSutujeonTrick,
+    startNextRound,
   } = useMultiplayStore();
 
   const [sortMethod, setSortMethod] = useState<SortMethod>('SUIT');
@@ -156,6 +157,16 @@ export default function MultiplaySutujeonBoard() {
     return () => clearTimeout(timer);
   }, [isHost, phase, gameState, publicPlayers]);
 
+  // ── Host auto-restarts after 10 seconds in RESULT ──
+  useEffect(() => {
+    if (isHost && phase === 'RESULT') {
+      const timer = setTimeout(() => {
+        startNextRound();
+      }, 10000);
+      return () => clearTimeout(timer);
+    }
+  }, [isHost, phase, startNextRound]);
+
   // ── Render Helpers ──
   const OpponentInfo = ({ uid, className = '' }: { uid: string; className?: string }) => {
     const info = publicPlayers[uid];
@@ -263,6 +274,16 @@ export default function MultiplaySutujeonBoard() {
                 </div>
               ))}
             </div>
+            {isHost && (
+              <div className="flex flex-col items-center gap-2 mt-4 anim-fade-up">
+                <Button onClick={() => startNextRound()} size="lg" className="w-full">
+                  다음 판 시작
+                </Button>
+                <span className="text-xs" style={{ color: 'var(--tujeon-cream-dim)' }}>
+                  (10초 후 자동 시작)
+                </span>
+              </div>
+            )}
           </div>
         </div>
       )}
