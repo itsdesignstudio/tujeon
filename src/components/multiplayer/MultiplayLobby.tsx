@@ -3,6 +3,8 @@
 import React, { useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMultiplayStore, RoomConfig } from '@/logic/useMultiplayStore';
+import { getFirebaseDb } from '@/lib/firebase';
+import { ref, update, get as firebaseGet } from 'firebase/database';
 import { createDeck, shuffleDeck, dealFromDeck } from '@/data/deck';
 import { GAME_MODE_INFO, GameMode } from '@/types/game';
 import Button from '@/components/ui/Button';
@@ -36,6 +38,7 @@ export default function MultiplayLobby({ onBack }: MultiplayLobbyProps = {}) {
 
   const [step, setStep] = useState<LobbyStep>('MENU');
   const [selectedMode, setSelectedMode] = useState<GameMode>('GAGU');
+  const [selectedMaxPlayers, setSelectedMaxPlayers] = useState<number>(4);
   const [playerName, setPlayerName] = useState('');
   const [joinCode, setJoinCode] = useState('');
   const [error, setError] = useState('');
@@ -50,7 +53,7 @@ export default function MultiplayLobby({ onBack }: MultiplayLobbyProps = {}) {
     try {
       const config: RoomConfig = {
         gameMode: selectedMode,
-        maxPlayers: selectedMode === 'SUTUJEON' ? 4 : 2,
+        maxPlayers: selectedMode === 'GAGU' ? 2 : selectedMaxPlayers,
       };
       const newRoomId = await createRoom(config, finalName);
       setStep('WAITING');
@@ -94,6 +97,27 @@ export default function MultiplayLobby({ onBack }: MultiplayLobbyProps = {}) {
   const handleStartGame = useCallback(async () => {
     if (!isHost || !roomConfig) return;
     
+    const db = getFirebaseDb();
+    const currentUids = Object.keys(publicPlayers);
+    const botsToGenerate = roomConfig.maxPlayers - currentUids.length;
+    
+    // Generate bots if room is not full
+    if (botsToGenerate > 0) {
+      const updates: Record<string, any> = {};
+      for (let i = 0; i < botsToGenerate; i++) {
+        const botId = `bot_${Date.now()}_${i}`;
+        currentUids.push(botId);
+        updates[`rooms/${roomId}/publicPlayers/${botId}`] = {
+          name: `투전 봇 ${i + 1}`,
+          cardCount: 0,
+          score: 0,
+          isOnline: true,
+          isBot: true,
+        };
+      }
+      await update(ref(db), updates);
+    }
+
     // Determine the number of cards per player
     let numCards = 2; // Default for GAGU
     if (roomConfig.gameMode === 'SUTUJEON') numCards = 20;
@@ -103,9 +127,9 @@ export default function MultiplayLobby({ onBack }: MultiplayLobbyProps = {}) {
     let deck = shuffleDeck(createDeck(roomConfig.gameMode === 'SUTUJEON' ? 80 : 40));
     const playersHands: Record<string, string[]> = {};
 
-    // Deal cards to each player in the room
+    // Deal cards to each player in the room (including bots)
     const gaguStatus: Record<string, { hasStood: boolean; score: number }> = {};
-    Object.keys(publicPlayers).forEach((uid) => {
+    currentUids.forEach((uid) => {
       const { dealt, remaining } = dealFromDeck(deck, numCards);
       deck = remaining;
       playersHands[uid] = dealt.map(c => c.id);
@@ -304,6 +328,28 @@ export default function MultiplayLobby({ onBack }: MultiplayLobbyProps = {}) {
               </div>
             </div>
 
+            {selectedMode !== 'GAGU' && (
+              <div className="flex flex-col gap-1.5 mt-2">
+                <label className="text-xs font-bold" style={{ color: 'var(--tujeon-gold-dim)', fontFamily: 'var(--font-serif)' }}>
+                  최대 인원
+                </label>
+                <div className="flex gap-2">
+                  {[2, 3, 4].map((num) => (
+                    <button
+                      key={num}
+                      className={`glass-panel flex-1 px-3 py-2.5 text-sm text-center transition-all ${
+                        selectedMaxPlayers === num ? 'ring-1 ring-yellow-600/40' : 'opacity-60'
+                      }`}
+                      style={{ fontFamily: 'var(--font-serif)', color: 'var(--tujeon-gold-light)' }}
+                      onClick={() => setSelectedMaxPlayers(num)}
+                    >
+                      {num}명
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {error && (
               <div className="text-xs text-center" style={{ color: 'var(--tujeon-red-light)' }}>{error}</div>
             )}
@@ -481,10 +527,9 @@ export default function MultiplayLobby({ onBack }: MultiplayLobbyProps = {}) {
               {isHost && (
                 <Button
                   onClick={handleStartGame}
-                  disabled={playerCount < 2}
                   className="flex-1"
                 >
-                  게임 시작
+                  {playerCount < (roomConfig?.maxPlayers || 2) ? '봇 포함 시작' : '게임 시작'}
                 </Button>
               )}
             </div>

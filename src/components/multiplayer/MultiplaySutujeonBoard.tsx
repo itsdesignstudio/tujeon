@@ -5,6 +5,8 @@ import { useMultiplayStore } from '@/logic/useMultiplayStore';
 import { Card, SUIT_INFO } from '@/types/game';
 import CardComponent from '../game/CardComponent';
 import SutujeonRuleHelper from '../game/SutujeonRuleHelper';
+import { getFirebaseDb } from '@/lib/firebase';
+import { ref, get as firebaseGet, update } from 'firebase/database';
 import Button from '@/components/ui/Button';
 import VictoryEffect from '@/components/ui/VictoryEffect';
 
@@ -94,6 +96,65 @@ export default function MultiplaySutujeonBoard() {
       return () => clearTimeout(timer);
     }
   }, [isHost, phase, evaluateSutujeonTrick]);
+
+  // ── Host auto-plays for bots ──
+  useEffect(() => {
+    if (!isHost || phase !== 'PLAYER_ACTION' || !gameState?.currentTurn) return;
+    const currentTurnInfo = publicPlayers[gameState.currentTurn];
+    if (!currentTurnInfo?.isBot) return;
+
+    const botId = gameState.currentTurn;
+    const timer = setTimeout(async () => {
+      const db = getFirebaseDb();
+      // Fetch bot hand
+      const botHandSnap = await firebaseGet(ref(db, `rooms/${useMultiplayStore.getState().roomId}/privatePlayers/${botId}/hand`));
+      if (!botHandSnap.exists()) return;
+      const botHand: string[] = botHandSnap.val();
+      
+      // Determine valid card
+      let validCards = botHand;
+      if (gameState.ledSuit) {
+        const matchingSuit = botHand.filter(c => c.startsWith(gameState.ledSuit!));
+        if (matchingSuit.length > 0) validCards = matchingSuit;
+      }
+      
+      // Pick random card
+      const selectedCard = validCards[Math.floor(Math.random() * validCards.length)];
+      if (!selectedCard) return;
+
+      const newHand = botHand.filter(c => c !== selectedCard);
+      const suit = selectedCard.split('_')[0];
+      
+      const currentActions = gameState.sutujeonTrickActions || [];
+      const newActions = [...currentActions, { playerId: botId, cardId: selectedCard }];
+      
+      const players = Object.keys(publicPlayers).sort();
+      const bIdx = players.indexOf(botId);
+      
+      const updates: Record<string, any> = {};
+      const roomId = useMultiplayStore.getState().roomId;
+      
+      updates[`rooms/${roomId}/privatePlayers/${botId}/hand`] = newHand;
+      updates[`rooms/${roomId}/publicPlayers/${botId}/cardCount`] = newHand.length;
+      updates[`rooms/${roomId}/gameState/sutujeonTrickActions`] = newActions;
+      
+      if (currentActions.length === 0) {
+        updates[`rooms/${roomId}/gameState/ledSuit`] = suit;
+      }
+      
+      if (newActions.length === players.length) { // Trick is complete
+        updates[`rooms/${roomId}/gameState/phase`] = 'TRICK_EVAL';
+        updates[`rooms/${roomId}/gameState/currentTurn`] = null;
+      } else {
+        const nextTurn = players[(bIdx + 1) % players.length];
+        updates[`rooms/${roomId}/gameState/currentTurn`] = nextTurn;
+      }
+      
+      await update(ref(db), updates);
+    }, 1500);
+    
+    return () => clearTimeout(timer);
+  }, [isHost, phase, gameState, publicPlayers]);
 
   // ── Render Helpers ──
   const OpponentInfo = ({ uid, className = '' }: { uid: string; className?: string }) => {

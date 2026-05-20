@@ -26,8 +26,24 @@ export default function MultiplayGameBoard() {
   const isMyTurn = gameState?.currentTurn === myId;
   const myCards = privateHand as string[];
 
-  const opponents = Object.entries(publicPlayers).filter(([uid]) => uid !== myId);
   const myInfo = myId ? publicPlayers[myId] : null;
+
+  const { leftId, topId, rightId } = useMemo(() => {
+    const uids = Object.keys(publicPlayers).sort();
+    if (uids.length < 2 || !myId) return { leftId: '', topId: '', rightId: '' };
+    const myIndex = uids.indexOf(myId);
+    if (uids.length === 2) {
+      return { leftId: '', topId: uids[(myIndex + 1) % 2], rightId: '' };
+    }
+    if (uids.length === 3) {
+      return { leftId: uids[(myIndex + 1) % 3], topId: '', rightId: uids[(myIndex + 2) % 3] };
+    }
+    return {
+      leftId: uids[(myIndex + 1) % 4],
+      topId: uids[(myIndex + 2) % 4],
+      rightId: uids[(myIndex + 3) % 4],
+    };
+  }, [publicPlayers, myId]);
 
   const [selectedCardIds, setSelectedCardIds] = useState<string[]>([]);
   const [isHwangModalOpen, setIsHwangModalOpen] = useState(false);
@@ -75,6 +91,120 @@ export default function MultiplayGameBoard() {
     } as any);
   }, [canConfirm, myId, selectedCardIds, updateGameState]);
 
+  // ── Host auto-plays for bots ──
+  React.useEffect(() => {
+    if (!isHost || phase !== 'MAKE_COMBINATION') return;
+
+    const bots = Object.entries(publicPlayers).filter(([uid, info]) => info.isBot && !(gameState as any)?.[`confirmed_${uid}`]);
+    if (bots.length === 0) return;
+
+    bots.forEach(([botId]) => {
+      setTimeout(async () => {
+        const { getFirebaseDb } = await import('@/lib/firebase');
+        const { ref, get: firebaseGet } = await import('firebase/database');
+        const db = getFirebaseDb();
+        const roomId = useMultiplayStore.getState().roomId;
+        if (!roomId) return;
+        
+        const botHandSnap = await firebaseGet(ref(db, `rooms/${roomId}/privatePlayers/${botId}/hand`));
+        if (!botHandSnap.exists()) return;
+        
+        const hand: string[] = botHandSnap.val();
+        
+        // Find 3 cards that sum to % 10 === 0
+        let bestSelection: string[] = [];
+        
+        const parsed = hand.map((cardId) => {
+          const parts = cardId.split('_');
+          return { id: cardId, rank: parseInt(parts[1], 10) };
+        });
+        
+        let found = false;
+        for (let i = 0; i < parsed.length - 2; i++) {
+          for (let j = i + 1; j < parsed.length - 1; j++) {
+            for (let k = j + 1; k < parsed.length; k++) {
+              if ((parsed[i].rank + parsed[j].rank + parsed[k].rank) % 10 === 0) {
+                bestSelection = [parsed[i].id, parsed[j].id, parsed[k].id];
+                found = true;
+                break;
+              }
+            }
+            if (found) break;
+          }
+          if (found) break;
+        }
+        
+        if (!found) bestSelection = hand.slice(0, 3);
+        
+        await updateGameState({
+          [`confirmed_${botId}`]: bestSelection.join(','),
+        } as any);
+        
+      }, 1500 + Math.random() * 2000);
+    });
+  }, [isHost, phase, gameState, publicPlayers, updateGameState]);
+
+  // ── Host phase transition check ──
+  React.useEffect(() => {
+    if (!isHost || phase !== 'MAKE_COMBINATION') return;
+    const allPlayers = Object.keys(publicPlayers);
+    const allConfirmed = allPlayers.every(uid => (gameState as any)?.[`confirmed_${uid}`]);
+    if (allConfirmed) {
+      updateGameState({ phase: 'SHOWDOWN' } as any);
+    }
+  }, [isHost, phase, gameState, publicPlayers, updateGameState]);
+
+  const OpponentInfo = ({ uid }: { uid: string }) => {
+    const info = publicPlayers[uid];
+    if (!info) return null;
+    
+    return (
+      <div className="flex flex-col items-center gap-1.5 pointer-events-auto">
+        <div className="glass-panel px-2 sm:px-4 py-1.5 sm:py-2 flex items-center gap-2">
+          <div
+            className="w-6 h-6 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
+            style={{
+              fontFamily: 'var(--font-serif)',
+              background: 'linear-gradient(135deg, var(--tujeon-blue), var(--tujeon-blue-light))',
+              color: 'var(--tujeon-cream)',
+            }}
+          >
+            상대
+          </div>
+          <div className="flex flex-col min-w-0">
+            <span className="font-bold text-[10px] sm:text-xs truncate" style={{ fontFamily: 'var(--font-serif)', color: 'var(--tujeon-cream)', maxWidth: '60px' }}>
+              {info.name}
+            </span>
+            <span className="text-[9px] sm:text-[10px]" style={{ color: 'var(--tujeon-cream-dim)' }}>
+              카드: {info.cardCount}장
+            </span>
+          </div>
+        </div>
+        <div className="flex gap-0.5">
+          {Array.from({ length: info.cardCount }).map((_, i) => (
+            <div
+              key={i}
+              className="rounded"
+              style={{
+                width: 20,
+                height: 30,
+                background: `repeating-conic-gradient(var(--tujeon-red) 0% 25%, var(--tujeon-blue) 25% 50%) 50% / 10px 10px`,
+                border: '1px solid var(--tujeon-gold-dim)',
+                boxShadow: 'var(--shadow-card)',
+              }}
+            />
+          ))}
+        </div>
+        {/* Status */}
+        {(gameState as any)?.[`confirmed_${uid}`] && (
+          <div className="text-[9px] sm:text-[10px] font-bold mt-1 px-2 py-0.5 rounded-full" style={{ background: 'rgba(127,176,105,0.2)', color: '#7fb069' }}>
+            준비 완료
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div className="table-felt min-h-[100dvh] flex flex-col items-center justify-between py-3 px-3 sm:py-6 sm:px-4 relative overflow-hidden">
       {/* ── Ambient ── */}
@@ -93,49 +223,25 @@ export default function MultiplayGameBoard() {
         </div>
       </div>
 
-      {/* ── Opponent (top) ── */}
-      <div className="mt-20 sm:mt-16">
-        {opponents.map(([uid, info]) => (
-          <div key={uid} className="flex flex-col items-center gap-1.5">
-            <div className="glass-panel px-3 sm:px-5 py-2 sm:py-3 flex items-center gap-2 sm:gap-4">
-              <div
-                className="w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center text-sm font-bold shrink-0"
-                style={{
-                  fontFamily: 'var(--font-serif)',
-                  background: 'linear-gradient(135deg, var(--tujeon-blue), var(--tujeon-blue-light))',
-                  color: 'var(--tujeon-cream)',
-                }}
-              >
-                상대
-              </div>
-              <div className="flex flex-col">
-                <span className="font-bold text-sm sm:text-base" style={{ fontFamily: 'var(--font-serif)', color: 'var(--tujeon-cream)' }}>
-                  {info.name}
-                </span>
-                <span className="text-[10px] sm:text-xs" style={{ color: 'var(--tujeon-cream-dim)' }}>
-                  카드: {info.cardCount}장
-                </span>
-              </div>
-            </div>
-            {/* Dummy card backs */}
-            <div className="flex gap-1">
-              {Array.from({ length: info.cardCount }).map((_, i) => (
-                <div
-                  key={i}
-                  className="rounded-md"
-                  style={{
-                    width: 40,
-                    height: 60,
-                    background: `repeating-conic-gradient(var(--tujeon-red) 0% 25%, var(--tujeon-blue) 25% 50%) 50% / 14px 14px`,
-                    border: '2px solid var(--tujeon-gold-dim)',
-                    borderRadius: 'var(--card-radius)',
-                    boxShadow: 'var(--shadow-card)',
-                  }}
-                />
-              ))}
-            </div>
-          </div>
-        ))}
+      {/* ── Opponents Layout ── */}
+      <div className="absolute inset-0 pointer-events-none z-0">
+        {/* Mobile top row */}
+        <div className="absolute top-20 left-0 right-0 flex justify-around items-start px-2 sm:hidden">
+          <OpponentInfo uid={leftId} />
+          <OpponentInfo uid={topId} />
+          <OpponentInfo uid={rightId} />
+        </div>
+
+        {/* Desktop positioned around the table */}
+        <div className="hidden sm:block absolute top-16 left-1/2 -translate-x-1/2">
+          <OpponentInfo uid={topId} />
+        </div>
+        <div className="hidden sm:block absolute left-8 top-1/2 -translate-y-1/2">
+          <OpponentInfo uid={leftId} />
+        </div>
+        <div className="hidden sm:block absolute right-8 top-1/2 -translate-y-1/2">
+          <OpponentInfo uid={rightId} />
+        </div>
       </div>
 
       {/* ── Center area ── */}

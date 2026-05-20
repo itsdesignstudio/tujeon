@@ -30,6 +30,7 @@ export interface RTDBPublicPlayer {
   cardCount: number;
   score: number;
   isOnline?: boolean;
+  isBot?: boolean;
 }
 
 export interface RoomState {
@@ -373,7 +374,7 @@ export const useMultiplayStore = create<MultiplayState>((set, get) => ({
     });
 
     // Also update phase to DEAL or PLAYER_ACTION
-    updates[`rooms/${roomId}/gameState/phase`] = 'PLAYER_ACTION';
+    updates[`rooms/${roomId}/gameState/phase`] = roomConfig?.gameMode === 'DOLRYEO_DAEGI' ? 'MAKE_COMBINATION' : 'PLAYER_ACTION';
     
     if (deck) {
       updates[`rooms/${roomId}/gameState/deck`] = deck;
