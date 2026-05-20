@@ -41,15 +41,18 @@ export default function PlayerList({ players, myId, hostId }: PlayerListProps) {
 
             {/* Name */}
             <div className="flex flex-col min-w-0 flex-1">
-              <span
-                className="font-bold text-sm truncate"
-                style={{ fontFamily: 'var(--font-serif)', color: 'var(--tujeon-cream)' }}
+              <div
+                className="font-bold text-sm flex items-center gap-1.5 flex-wrap"
+                style={{ fontFamily: 'var(--font-serif)', color: player.isOnline === false ? 'var(--tujeon-cream-dim)' : 'var(--tujeon-cream)' }}
               >
-                {player.name}
+                <span className="truncate max-w-[120px] sm:max-w-[180px]">{player.name}</span>
                 {isMe && (
-                  <span className="text-[10px] ml-1.5 opacity-60">(나)</span>
+                  <span className="text-[10px] opacity-60">(나)</span>
                 )}
-              </span>
+                {player.isOnline === false && (
+                  <span className="text-[10px] text-red-400 px-1.5 py-0.5 rounded bg-red-500/10 border border-red-500/20 whitespace-nowrap">오프라인</span>
+                )}
+              </div>
               {isHost && (
                 <span
                   className="text-[10px] uppercase tracking-wider"
@@ -60,13 +63,15 @@ export default function PlayerList({ players, myId, hostId }: PlayerListProps) {
               )}
             </div>
 
-            {/* Ready indicator */}
+            {/* Status indicator */}
             <div
               className="w-2.5 h-2.5 rounded-full shrink-0"
               style={{
-                background: 'var(--tujeon-gold)',
-                boxShadow: '0 0 8px rgba(200,169,110,0.5)',
+                background: player.isOnline === false ? 'var(--tujeon-red)' : 'var(--tujeon-gold)',
+                boxShadow: player.isOnline === false ? 'none' : '0 0 8px rgba(200,169,110,0.5)',
+                opacity: player.isOnline === false ? 0.6 : 1,
               }}
+              title={player.isOnline === false ? '오프라인' : '온라인'}
             />
           </div>
         );

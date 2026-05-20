@@ -9,8 +9,14 @@ import MultiplaySutujeonBoard from '@/components/multiplayer/MultiplaySutujeonBo
 
 export default function MultiplayGameWrapper({ mode }: { mode: string }) {
   const router = useRouter();
-  const { roomId, gameState, publicPlayers, leaveRoom } = useMultiplayStore();
+  const { myId, roomId, gameState, publicPlayers, leaveRoom } = useMultiplayStore();
   const [playerLeft, setPlayerLeft] = React.useState(false);
+
+  const isOpponentOffline = React.useMemo(() => {
+    if (!myId || !publicPlayers || gameState?.phase === 'LOBBY') return false;
+    const opponents = Object.entries(publicPlayers).filter(([id]) => id !== myId);
+    return opponents.length > 0 && opponents.some(([, p]) => p.isOnline === false);
+  }, [myId, publicPlayers, gameState?.phase]);
 
   React.useEffect(() => {
     // If the game has started (not LOBBY) and players drop below 2
@@ -69,10 +75,33 @@ export default function MultiplayGameWrapper({ mode }: { mode: string }) {
     </div>
   ) : null;
 
+  const ReconnectingOverlay = isOpponentOffline && !playerLeft ? (
+    <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center" style={{ background: 'rgba(0,0,0,0.85)' }}>
+      <div className="text-xl sm:text-2xl font-bold mb-4 anim-fade-up text-center" style={{ fontFamily: 'var(--font-serif)', color: 'var(--tujeon-gold)' }}>
+        상대방의 연결이 끊어졌습니다.<br/>
+        재연결을 기다리는 중...
+      </div>
+      <div className="text-sm anim-pulse-glow mb-8" style={{ color: 'var(--tujeon-cream-dim)' }}>
+        잠시 후에도 돌아오지 않으면 게임을 종료할 수 있습니다.
+      </div>
+      <button
+        onClick={() => {
+          useMultiplayStore.getState().leaveRoom();
+          router.push('/');
+        }}
+        className="px-6 py-2 rounded-full border border-red-500/50 hover:bg-red-500/20 text-red-400 transition-colors"
+        style={{ fontFamily: 'var(--font-serif)' }}
+      >
+        게임 종료하고 나가기
+      </button>
+    </div>
+  ) : null;
+
   if (mode === 'GAGU') {
     return (
       <>
         {PlayerLeftOverlay}
+        {ReconnectingOverlay}
         {BackButton}
         <MultiplayGaguBoard />
       </>
@@ -83,6 +112,7 @@ export default function MultiplayGameWrapper({ mode }: { mode: string }) {
     return (
       <>
         {PlayerLeftOverlay}
+        {ReconnectingOverlay}
         {BackButton}
         <MultiplaySutujeonBoard />
       </>
@@ -92,6 +122,7 @@ export default function MultiplayGameWrapper({ mode }: { mode: string }) {
   return (
     <>
       {PlayerLeftOverlay}
+      {ReconnectingOverlay}
       {BackButton}
       <MultiplayGameBoard />
     </>

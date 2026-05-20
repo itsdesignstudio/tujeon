@@ -29,6 +29,7 @@ export interface RTDBPublicPlayer {
   name: string;
   cardCount: number;
   score: number;
+  isOnline?: boolean;
 }
 
 export interface RoomState {
@@ -170,11 +171,26 @@ export const useMultiplayStore = create<MultiplayState>((set, get) => ({
 
     // ── Handle Presence and Reconnections ──
     const connectedRef = ref(db, '.info/connected');
-    const connectedUnsubscribe = onValue(connectedRef, async (snap) => {
-      if (snap.val() === true) {
-        // Establish onDisconnect hook on the server side
-        onDisconnect(meRef).remove();
+    const phaseRef = ref(db, `rooms/${roomId}/gameState/phase`);
+    let currentPhase = 'LOBBY';
+    let isSocketConnected = false;
 
+    // Track phase locally to adjust onDisconnect dynamically
+    const phaseUnsubscribe = onValue(phaseRef, (snap) => {
+      currentPhase = snap.val() || 'LOBBY';
+      if (isSocketConnected) {
+        onDisconnect(meRef).cancel();
+        if (currentPhase === 'LOBBY') {
+          onDisconnect(meRef).remove();
+        } else {
+          onDisconnect(child(meRef, 'isOnline')).set(false);
+        }
+      }
+    });
+
+    const connectedUnsubscribe = onValue(connectedRef, async (snap) => {
+      isSocketConnected = snap.val() === true;
+      if (isSocketConnected) {
         // Check if room config still exists (it might have been deleted)
         const roomConfigSnap = await firebaseGet(child(ref(db), `rooms/${roomId}/config`));
         if (!roomConfigSnap.exists()) {
@@ -182,13 +198,14 @@ export const useMultiplayStore = create<MultiplayState>((set, get) => ({
           return;
         }
 
-        // Add self to public players if missing
+        // Add self to public players if missing, or update isOnline
         const meSnap = await firebaseGet(meRef);
         if (!meSnap.exists()) {
           await firebaseSet(meRef, {
             name: playerName,
             cardCount: 0,
             score: 0,
+            isOnline: true,
           });
 
           // Initialize private hand if missing
@@ -207,16 +224,31 @@ export const useMultiplayStore = create<MultiplayState>((set, get) => ({
             await firebaseRemove(mmRef);
           } else {
             // Only update queue if we are still in LOBBY phase
-            const phaseSnap = await firebaseGet(ref(db, `rooms/${roomId}/gameState/phase`));
-            if (!phaseSnap.exists() || phaseSnap.val() === 'LOBBY') {
+            if (currentPhase === 'LOBBY') {
               await update(mmRef, { currentPlayers });
             }
           }
+        } else {
+          // If already exists, mark as online
+          await firebaseSet(child(meRef, 'isOnline'), true);
+        }
+
+        // Establish onDisconnect hook dynamically based on phase
+        onDisconnect(meRef).cancel();
+        if (currentPhase === 'LOBBY') {
+          onDisconnect(meRef).remove();
+        } else {
+          onDisconnect(child(meRef, 'isOnline')).set(false);
         }
       }
     });
 
-    set({ roomId, myId, isMatchmaking: false, _connectedUnsubscribe: connectedUnsubscribe });
+    const combinedUnsubscribe = () => {
+      phaseUnsubscribe();
+      connectedUnsubscribe();
+    };
+
+    set({ roomId, myId, isMatchmaking: false, _connectedUnsubscribe: combinedUnsubscribe });
 
     // Setup Listeners
     const configRef = ref(db, `rooms/${roomId}/config`);
