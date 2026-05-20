@@ -36,9 +36,9 @@ export default function CardHand({
 
   return (
     <div className="flex flex-col items-center gap-2 sm:gap-3 w-full">
-      {/* Cards — scroll container for overlap, flex for normal */}
-      <div className={useOverlap ? 'card-hand-scroll w-full' : 'flex items-end justify-center'}>
-        <div className={useOverlap ? 'card-hand-overlap' : 'flex items-end justify-center gap-1 sm:gap-2'}>
+      {/* Cards — scroll container ensures no clipping on small screens */}
+      <div className="card-hand-scroll w-full">
+        <div className={useOverlap ? 'card-hand-overlap mx-auto' : 'flex items-end gap-1 sm:gap-2 mx-auto px-2 sm:px-4'}>
           {cards.map((card, idx) => (
             <CardComponent
               key={card.id}
