@@ -2,6 +2,7 @@
 
 import React, { useRef, useEffect, useMemo } from 'react';
 import gsap from 'gsap';
+import { gameAudio } from '@/lib/audio';
 
 interface VictoryEffectProps {
   type: 'VICTORY' | 'DEFEAT' | 'DRAW' | null;
@@ -21,6 +22,15 @@ export default function VictoryEffect({ type }: VictoryEffectProps) {
 
   useEffect(() => {
     if (!type || !containerRef.current || !textRef.current) return;
+
+    // Trigger synthesized procedural SFX matching the visual outcome
+    if (type === 'VICTORY') {
+      gameAudio.playVictory();
+    } else if (type === 'DEFEAT') {
+      gameAudio.playDefeat();
+    } else if (type === 'DRAW') {
+      gameAudio.playDraw();
+    }
 
     const ctx = gsap.context(() => {
       // Text animation

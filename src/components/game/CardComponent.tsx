@@ -1,7 +1,8 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Card, SUIT_INFO } from '@/types/game';
+import { gameAudio } from '@/lib/audio';
 
 interface CardComponentProps {
   card: Card;
@@ -44,6 +45,13 @@ export default function CardComponent({
   const suitClass = `suit-${card.suit.toLowerCase()}`;
   const isJang = card.rank === 10;
 
+  // Rhythmic card drawing sound effect synchronized with visual delay
+  useEffect(() => {
+    if (dealDelay !== undefined && dealDelay >= 0) {
+      gameAudio.playCardDraw(dealDelay);
+    }
+  }, [card.id, dealDelay]);
+
   const sizeStyles = {
     xs: { width: 36, height: 54, rankSize: '0.75rem', hanjaSize: '1.20rem', labelSize: '0.5rem', cornerPad: '2px 3px', borderRadius: '4px' },
     sm: { width: 52, height: 78, rankSize: '1.0rem', hanjaSize: '1.60rem', labelSize: '0.7rem', cornerPad: '3px 4px', borderRadius: '6px' },
@@ -54,9 +62,14 @@ export default function CardComponent({
   const s = sizeStyles[size];
   const rankLabel = isJang ? '장' : String(card.rank);
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if ((e.key === 'Enter' || e.key === ' ') && !isDisabled && onClick) {
-      e.preventDefault();
+  const handleKeyOrClick = () => {
+    if (!isDisabled && onClick) {
+      // Determine click style: selection click vs play card sweep
+      if (isSelected !== undefined) {
+        gameAudio.playCardSelect();
+      } else {
+        gameAudio.playCardPlay();
+      }
       onClick();
     }
   };
@@ -70,8 +83,13 @@ export default function CardComponent({
         borderRadius: s.borderRadius,
         animationDelay: `${dealDelay}ms`,
       }}
-      onClick={!isDisabled ? onClick : undefined}
-      onKeyDown={handleKeyDown}
+      onClick={!isDisabled ? handleKeyOrClick : undefined}
+      onKeyDown={(e) => {
+        if ((e.key === 'Enter' || e.key === ' ') && !isDisabled) {
+          e.preventDefault();
+          handleKeyOrClick();
+        }
+      }}
       role="button"
       aria-label={`${suitInfo.label} ${rankLabel}`}
       tabIndex={isDisabled ? -1 : 0}
@@ -158,7 +176,7 @@ export default function CardComponent({
                   boxShadow: '0 2px 8px rgba(200,169,110,0.5)',
                 }}
               >
-                {selectionIndex ?? '✓'}
+                ✓
               </div>
               {/* Bottom light ray */}
               <div

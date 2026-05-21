@@ -9,6 +9,7 @@ import RuleHelper from './RuleHelper';
 import Modal from '@/components/ui/Modal';
 import VictoryEffect from '@/components/ui/VictoryEffect';
 import { useRouter } from 'next/navigation';
+import { gameAudio } from '@/lib/audio';
 
 export default function GameBoard() {
   const router = useRouter();
@@ -18,19 +19,61 @@ export default function GameBoard() {
     winnerId,
     roundNumber,
     betAmount,
+    currentRoundBet,
+    timeLeft,
+    dealCards,
     toggleCardSelection,
     confirmCombination,
     declareHwang,
     evaluateHands,
     nextRound,
     resetGame,
+    setBetAmount,
+    restartGame,
   } = useGameStore();
 
   const humanPlayer = players.find((p) => !p.isBot);
   const botPlayer = players.find((p) => p.isBot);
 
-  const [isHwangModalOpen, setIsHwangModalOpen] = useState(false);
+  const [isHwangConfirmOpen, setIsHwangConfirmOpen] = useState(false);
   const [showRuleHelper, setShowRuleHelper] = useState(false);
+
+  const isGameOver = useMemo(() => {
+    return players.length > 0 && players.some((p) => p.score <= 0);
+  }, [players]);
+
+  const [hasPlayedGameOverSound, setHasPlayedGameOverSound] = useState(false);
+  useEffect(() => {
+    if (isGameOver && !hasPlayedGameOverSound) {
+      const humanWon = botPlayer && botPlayer.score <= 0;
+      if (humanWon) {
+        gameAudio.playVictory();
+      } else {
+        gameAudio.playDefeat();
+      }
+      setHasPlayedGameOverSound(true);
+    } else if (!isGameOver) {
+      setHasPlayedGameOverSound(false);
+    }
+  }, [isGameOver, hasPlayedGameOverSound, botPlayer]);
+
+  const handleBetAmountChange = useCallback(() => {
+    if (isGameOver) return;
+    const nextAmount = betAmount === 100 ? 150 : betAmount === 150 ? 200 : 100;
+    setBetAmount(nextAmount);
+    gameAudio.playCardSelect();
+  }, [betAmount, isGameOver, setBetAmount]);
+
+  // Mute preference state tracking
+  const [isMuted, setIsMuted] = useState(false);
+  useEffect(() => {
+    setIsMuted(gameAudio.getMuted());
+  }, []);
+
+  const toggleMute = useCallback(() => {
+    const nextMute = gameAudio.toggleMute();
+    setIsMuted(nextMute);
+  }, []);
 
   // Validate human's selection
   const selectedSum = useMemo(() => {
@@ -66,13 +109,13 @@ export default function GameBoard() {
   }, [humanPlayer, canConfirm, confirmCombination]);
 
   const handleHwang = useCallback(() => {
-    if (humanPlayer) setIsHwangModalOpen(true);
+    if (humanPlayer) setIsHwangConfirmOpen(true);
   }, [humanPlayer]);
 
   const confirmHwang = useCallback(() => {
     if (humanPlayer) {
       declareHwang(humanPlayer.id);
-      setIsHwangModalOpen(false);
+      setIsHwangConfirmOpen(false);
     }
   }, [humanPlayer, declareHwang]);
 
@@ -103,7 +146,8 @@ export default function GameBoard() {
       {/* ══════════════════════════════════════════════
           STATUS BAR — Top fixed
           ══════════════════════════════════════════════ */}
-      <div className="status-bar">
+      <div className="status-bar relative flex items-center justify-between">
+        {/* Left: Back Button */}
         <button
           onClick={() => {
             resetGame();
@@ -115,35 +159,65 @@ export default function GameBoard() {
           ←
         </button>
 
-        <div className="status-bar-item">
-          <span style={{ fontFamily: 'var(--font-serif)' }}>라운드</span>
-          <span className="status-bar-value">{roundNumber}</span>
-        </div>
-
-        <div className="w-px h-4 bg-white/10" />
-
-        <div className="status-bar-item">
-          <span style={{ fontFamily: 'var(--font-serif)' }}>판돈</span>
-          <span className="status-bar-value">{betAmount * players.length}</span>
-        </div>
-
-        <div className="flex-1" />
-
-        {humanPlayer && (
-          <div className="status-bar-item">
-            <span style={{ fontFamily: 'var(--font-serif)' }}>💰</span>
-            <span className="status-bar-value">{humanPlayer.score.toLocaleString('en-US')}</span>
+        {/* Center: Info Badge (라운드 / 판돈) */}
+        <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center gap-3 bg-white/5 px-3 py-1 rounded-full border border-white/10 shadow-md">
+          <div className="status-bar-item gap-1">
+            <span style={{ fontFamily: 'var(--font-serif)' }}>라운드</span>
+            <span className="status-bar-value">{roundNumber}</span>
           </div>
-        )}
 
-        <button
-          onClick={() => setShowRuleHelper(true)}
-          className="status-bar-back"
-          aria-label="규칙 도우미"
-          style={{ fontSize: '0.9rem' }}
-        >
-          ?
-        </button>
+          <div className="w-px h-3 bg-white/10" />
+
+          {/* Clickable Bet Amount Selector */}
+          <button
+            onClick={handleBetAmountChange}
+            disabled={isGameOver}
+            className={`status-bar-item gap-1 px-1.5 py-0.5 rounded transition-all duration-200 ${
+              !isGameOver
+                ? 'hover:bg-white/10 active:scale-95 cursor-pointer text-yellow-400'
+                : 'opacity-70 cursor-not-allowed text-white/80'
+            }`}
+            title={!isGameOver ? "판돈 설정 클릭 (100 -> 150 -> 200)" : undefined}
+          >
+            <span style={{ fontFamily: 'var(--font-serif)' }}>판돈</span>
+            <span className={`status-bar-value ${!isGameOver ? 'font-black' : 'font-medium'}`}>
+              {(gamePhase === 'LOBBY' || gamePhase === 'RESULT' ? betAmount : currentRoundBet) * (players.length || 2)}
+            </span>
+            {gamePhase !== 'LOBBY' && gamePhase !== 'RESULT' && betAmount !== currentRoundBet && (
+              <span className="text-[9px] text-white/40 font-normal ml-0.5" style={{ fontFamily: 'sans-serif' }}>
+                (다음 적용)
+              </span>
+            )}
+          </button>
+        </div>
+
+        {/* Right Action Icons & Score */}
+        <div className="flex items-center gap-2">
+          {humanPlayer && (
+            <div className="status-bar-item mr-1">
+              <span style={{ fontFamily: 'var(--font-serif)' }}>💰</span>
+              <span className="status-bar-value">{humanPlayer.score.toLocaleString('en-US')}</span>
+            </div>
+          )}
+
+          <button
+            onClick={toggleMute}
+            className="status-bar-back"
+            aria-label={isMuted ? "소리 켜기" : "소리 끄기"}
+            style={{ fontSize: '0.9rem' }}
+          >
+            {isMuted ? '🔇' : '🔊'}
+          </button>
+
+          <button
+            onClick={() => setShowRuleHelper(true)}
+            className="status-bar-back"
+            aria-label="규칙 도우미"
+            style={{ fontSize: '0.9rem' }}
+          >
+            ?
+          </button>
+        </div>
       </div>
 
       {/* ══════════════════════════════════════════════
@@ -175,6 +249,21 @@ export default function GameBoard() {
           {gamePhase === 'MAKE_COMBINATION' && '3장을 골라 집을 지으세요'}
           {gamePhase === 'SHOWDOWN' && '패 공개 중...'}
         </div>
+
+        {/* Timer countdown badge */}
+        {gamePhase === 'MAKE_COMBINATION' && timeLeft !== null && (
+          <div
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-sm font-bold shadow-lg transition-all duration-300 ${
+              timeLeft <= 5
+                ? 'bg-red-950/80 border-red-500 text-red-500 scale-110 animate-pulse shadow-red-900/50'
+                : 'bg-black/60 border-yellow-600/30 text-yellow-500'
+            }`}
+            style={{ fontFamily: 'var(--font-serif)' }}
+          >
+            <span className={timeLeft <= 5 ? 'animate-bounce' : ''}>⏳</span>
+            <span>{timeLeft}초 남음</span>
+          </div>
+        )}
 
         {/* Deck visual */}
         {gamePhase === 'MAKE_COMBINATION' && (
@@ -228,22 +317,63 @@ export default function GameBoard() {
           ══════════════════════════════════════════════ */}
       {(gamePhase === 'MAKE_COMBINATION' || gamePhase === 'SHOWDOWN') && (
         <div className="action-dock">
-          <Button
-            onClick={handleConfirm}
-            disabled={gamePhase === 'SHOWDOWN' || !canConfirm}
-            size="md"
-            className="flex-1 max-w-[200px]"
-          >
-            {gamePhase === 'SHOWDOWN' ? '패 공개 중...' : '집 짓기 확인'}
-          </Button>
-          <Button
-            onClick={handleHwang}
-            disabled={gamePhase === 'SHOWDOWN'}
-            variant="danger"
-            size="md"
-            className="max-w-[140px]"
-          >
-            황 선언
+          {isHwangConfirmOpen ? (
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-2 sm:gap-4 py-2.5 px-4 bg-red-950/80 border border-red-800/40 rounded-xl animate-fade-in w-full max-w-[420px] mx-auto shadow-[0_4px_25px_rgba(0,0,0,0.6)]">
+              <div className="flex flex-col items-center sm:items-start text-center sm:text-left">
+                <span className="text-xs sm:text-sm font-bold text-red-200" style={{ fontFamily: 'var(--font-serif)' }}>
+                  ⚠️ 정말 황(黃)을 선언하시겠습니까?
+                </span>
+                <span className="text-[10px] text-red-400 mt-0.5">
+                  황을 선언하면 이번 라운드는 즉시 패배합니다.
+                </span>
+              </div>
+              <div className="flex gap-2 shrink-0">
+                <Button
+                  onClick={confirmHwang}
+                  variant="danger"
+                  size="sm"
+                  className="px-4 py-1.5 font-bold text-xs"
+                >
+                  선언 확정
+                </Button>
+                <Button
+                  onClick={() => setIsHwangConfirmOpen(false)}
+                  variant="secondary"
+                  size="sm"
+                  className="px-4 py-1.5 font-bold text-xs"
+                >
+                  취소
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <>
+              <Button
+                onClick={handleConfirm}
+                disabled={gamePhase === 'SHOWDOWN' || !canConfirm}
+                size="md"
+                className="flex-1 max-w-[200px]"
+              >
+                {gamePhase === 'SHOWDOWN' ? '패 공개 중...' : '집 짓기 확인'}
+              </Button>
+              <Button
+                onClick={handleHwang}
+                disabled={gamePhase === 'SHOWDOWN'}
+                variant="danger"
+                size="md"
+                className="max-w-[140px]"
+              >
+                황 선언
+              </Button>
+            </>
+          )}
+        </div>
+      )}
+
+      {gamePhase === 'LOBBY' && (
+        <div className="action-dock">
+          <Button onClick={dealCards} size="md" className="flex-1 max-w-[220px]">
+            게임 시작
           </Button>
         </div>
       )}
@@ -257,19 +387,84 @@ export default function GameBoard() {
       )}
 
       {/* Spacer for action dock - stable and permanent */}
-      <div style={{ height: 'calc(52px + env(safe-area-inset-bottom))' }} />
+      <div style={{ height: 'calc(68px + env(safe-area-inset-bottom))' }} />
 
-      {/* ── Hwang Modal ── */}
-      <Modal isOpen={isHwangModalOpen} onClose={() => setIsHwangModalOpen(false)} title="황 선언" bottomSheet>
-        <p className="mb-5 text-sm" style={{ color: 'var(--tujeon-cream)' }}>
-          정말 10의 배수를 만들 수 있는 조합이 없습니까?<br />
-          <span style={{ color: 'var(--tujeon-red-light)' }}>황을 선언하면 이번 라운드에서 패배합니다.</span>
-        </p>
-        <div className="flex gap-3 justify-end">
-          <Button variant="secondary" onClick={() => setIsHwangModalOpen(false)}>취소</Button>
-          <Button variant="danger" onClick={confirmHwang}>선언하기</Button>
+      {/* ── Bankruptcy ("격파!") Fullscreen Overlay ── */}
+      {isGameOver && (
+        <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex flex-col items-center justify-center p-4 anim-fade-in">
+          <div 
+            className="w-full max-w-md bg-[#181214] border-2 border-yellow-600/50 rounded-xl p-6 text-center shadow-[0_0_50px_rgba(0,0,0,0.8)] relative overflow-hidden"
+            style={{ boxShadow: '0 0 30px rgba(184, 92, 92, 0.2)' }}
+          >
+            {/* Background texture hints */}
+            <div className="absolute inset-0 opacity-5 pointer-events-none bg-[radial-gradient(circle_at_center,_var(--tujeon-gold)_1px,_transparent_1px)] bg-[length:16px_16px]" />
+            
+            {/* Dramatic title */}
+            <h2 
+              className="text-4xl sm:text-5xl font-black tracking-widest mb-2 select-none animate-pulse"
+              style={{
+                fontFamily: 'var(--font-serif)',
+                color: botPlayer && botPlayer.score <= 0 ? 'var(--tujeon-gold)' : 'var(--tujeon-red-light)',
+                textShadow: '0 2px 10px rgba(0,0,0,0.9)'
+              }}
+            >
+              擊 破 !
+            </h2>
+            <p className="text-xl sm:text-2xl font-bold mb-6" style={{ fontFamily: 'var(--font-serif)', color: 'var(--tujeon-cream)' }}>
+              {botPlayer && botPlayer.score <= 0 ? '상 대 격 파 !' : '파 산 패 배 . . .'}
+            </p>
+
+            {/* Sub-text */}
+            <p className="text-sm text-white/70 mb-8 max-w-xs mx-auto leading-relaxed">
+              {botPlayer && botPlayer.score <= 0 
+                ? '상대의 자금을 완벽히 거덜냈습니다. 훌륭한 타짜이십니다!' 
+                : '소지금이 완전히 고갈되었습니다. 다시 도전하여 전세를 뒤집으십시오.'}
+            </p>
+
+            {/* Score result table */}
+            <div className="bg-black/40 border border-white/5 rounded-lg p-4 mb-8 flex flex-col gap-3">
+              <div className="text-xs text-white/40 tracking-wider font-bold text-left uppercase">최종 전적</div>
+              {players.map((p) => (
+                <div key={p.id} className="flex justify-between items-center">
+                  <div className="flex items-center gap-2">
+                    <span className={`w-2 h-2 rounded-full ${p.isBot ? 'bg-blue-400' : 'bg-yellow-500'}`} />
+                    <span className="text-sm font-semibold text-white/90">{p.name} {p.isBot && '(상대)'}</span>
+                  </div>
+                  <span className={`text-sm font-bold ${p.score <= 0 ? 'text-red-500' : 'text-yellow-400'}`}>
+                    {p.score <= 0 ? '0 (파산)' : `${p.score.toLocaleString()} 냥`}
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            {/* Actions */}
+            <div className="flex flex-col sm:flex-row gap-3 w-full justify-center">
+              <Button 
+                onClick={() => {
+                  restartGame();
+                }}
+                className="flex-1 font-bold text-sm tracking-wide text-black"
+                size="md"
+              >
+                다시 시작
+              </Button>
+              <Button 
+                onClick={() => {
+                  resetGame();
+                  router.push('/');
+                }}
+                variant="secondary"
+                className="flex-1 font-bold text-sm tracking-wide"
+                size="md"
+              >
+                홈으로 가기
+              </Button>
+            </div>
+          </div>
         </div>
-      </Modal>
+      )}
+
+
 
       {/* ── Rule Helper (Bottom Sheet) ── */}
       <RuleHelper isOpen={showRuleHelper} onClose={() => setShowRuleHelper(false)} />

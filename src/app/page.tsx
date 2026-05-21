@@ -7,6 +7,7 @@ import { useGameStore } from '@/logic/useGameStore';
 import { GAME_MODE_INFO, GameMode } from '@/types/game';
 import Button from '@/components/ui/Button';
 import TutorialModal from '@/components/game/TutorialModal';
+import { gameAudio } from '@/lib/audio';
 
 const MultiplayLobby = dynamic(() => import('@/components/multiplayer/MultiplayLobby'), {
   ssr: false,
@@ -22,14 +23,17 @@ const MODE_ICONS: Record<GameMode, { hanja: string; sub: string }> = {
 export default function Home() {
   const router = useRouter();
   const initGame = useGameStore((s) => s.initGame);
+  const { difficulty, setDifficulty } = useGameStore();
   const [showTutorial, setShowTutorial] = useState(false);
   const [selectedMode, setSelectedMode] = useState<GameMode>('DOLRYEO_DAEGI');
   const [showMultiplay, setShowMultiplay] = useState(false);
 
   const handleStartGame = useCallback(async () => {
+    gameAudio.playCardPlay();
     if (selectedMode === 'GAGU') {
       const { useGaguStore } = await import('@/logic/useGaguStore');
       useGaguStore.getState().initGagu();
+      initGame('GAGU', 2);
     } else if (selectedMode === 'SUTUJEON') {
       const { useSutujeonStore } = await import('@/logic/useSutujeonStore');
       useSutujeonStore.getState().initSutujeon();
@@ -116,7 +120,12 @@ export default function Home() {
                       ? 'cursor-pointer active:scale-[0.97]'
                       : 'opacity-25 cursor-not-allowed'
                   } ${isActive ? 'ring-2 ring-yellow-600/40 scale-[1.03]' : 'opacity-60 scale-[0.97]'}`}
-                  onClick={() => info.available && setSelectedMode(mode)}
+                  onClick={() => {
+                    if (info.available) {
+                      gameAudio.playCardSelect();
+                      setSelectedMode(mode);
+                    }
+                  }}
                   style={{
                     background: isActive
                       ? 'rgba(200, 169, 110, 0.08)'
@@ -165,6 +174,63 @@ export default function Home() {
               );
             }
           )}
+        </div>
+
+        {/* ════ Difficulty Selection ════ */}
+        <div className="w-full flex flex-col gap-2 anim-fade-up" style={{ animationDelay: '0.22s' }}>
+          <div className="flex justify-between items-center px-1">
+            <span 
+              className="text-xs font-bold tracking-wider" 
+              style={{ fontFamily: 'var(--font-serif)', color: 'var(--tujeon-gold-dim)' }}
+            >
+              난이도 설정
+            </span>
+            <span className="text-[10px] text-yellow-600/70 animate-pulse" style={{ fontFamily: 'var(--font-serif)' }}>
+              {difficulty === 'EASY' && '쉬움 (시간 제한 없음)'}
+              {difficulty === 'MEDIUM' && '보통 (긴장감 있는 대결)'}
+              {difficulty === 'HARD' && '어려움 (눈부신 순발력)'}
+            </span>
+          </div>
+
+          <div 
+            className="flex p-1 rounded-xl border"
+            style={{ 
+              background: 'rgba(26, 21, 18, 0.8)',
+              borderColor: 'rgba(200, 169, 110, 0.15)'
+            }}
+          >
+            {(['EASY', 'MEDIUM', 'HARD'] as const).map((diff) => {
+              const isSelected = diff === difficulty;
+              const labels = { EASY: '쉬움', MEDIUM: '보통', HARD: '어려움' };
+              return (
+                <button
+                  key={diff}
+                  className="flex-1 py-2 text-xs font-bold rounded-lg transition-all duration-300 active:scale-95 cursor-pointer"
+                  onClick={() => {
+                    gameAudio.playCardSelect();
+                    setDifficulty(diff);
+                  }}
+                  style={{
+                    fontFamily: 'var(--font-serif)',
+                    background: isSelected ? 'rgba(200, 169, 110, 0.12)' : 'transparent',
+                    color: isSelected ? 'var(--tujeon-gold-light)' : 'var(--tujeon-cream-dim)',
+                    border: isSelected ? '1px solid rgba(200, 169, 110, 0.3)' : '1px solid transparent',
+                  }}
+                >
+                  {labels[diff]}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Info Tip */}
+          <p 
+            className="text-[10px] text-center opacity-65 flex items-center justify-center gap-1 py-0.5"
+            style={{ color: 'var(--tujeon-cream-dim)', fontFamily: 'var(--font-serif)' }}
+          >
+            <span>💡</span>
+            <span>난이도는 <strong>돌려대기</strong>와 <strong>가구</strong> 모드에만 적용됩니다.</span>
+          </p>
         </div>
 
         {/* ════ CTA Buttons ════ */}

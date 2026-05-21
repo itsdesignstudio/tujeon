@@ -307,7 +307,7 @@ export default function MultiplaySutujeonBoard() {
       </div>
 
       {/* ── My Hand ── */}
-      <div className="px-2 pb-[calc(28px+env(safe-area-inset-bottom))] flex flex-col items-center z-10 w-full max-w-4xl mx-auto">
+      <div className="px-2 pb-[calc(38px+env(safe-area-inset-bottom))] flex flex-col items-center z-10 w-full max-w-4xl mx-auto">
         <div className="flex justify-between items-center w-full mb-1.5 px-1">
           <div className="flex items-center gap-2">
             <span className={`ink-panel px-2 py-0.5 text-[10px] font-bold transition-all duration-300 ${

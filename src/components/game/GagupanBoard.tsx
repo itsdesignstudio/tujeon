@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useGagupanStore } from '@/logic/useGagupanStore';
 import CardComponent from './CardComponent';
 import Button from '@/components/ui/Button';
@@ -8,6 +8,7 @@ import GagupanRuleHelper from './GagupanRuleHelper';
 import VictoryEffect from '@/components/ui/VictoryEffect';
 import { useRouter } from 'next/navigation';
 import { BettingSpotId } from '@/types/game';
+import { gameAudio } from '@/lib/audio';
 
 const CHIP_VALUES = [10, 50, 100, 500];
 
@@ -38,18 +39,23 @@ export default function GagupanBoard() {
   const [showRuleHelper, setShowRuleHelper] = useState(false);
   const [selectedChip, setSelectedChip] = useState<number>(100);
 
+  // Mute preference state tracking
+  const [isMuted, setIsMuted] = useState(false);
+  useEffect(() => {
+    setIsMuted(gameAudio.getMuted());
+  }, []);
+
+  const toggleMute = useCallback(() => {
+    const nextMute = gameAudio.toggleMute();
+    setIsMuted(nextMute);
+  }, []);
+
   // Initialize on mount
   useEffect(() => {
     initGagupan();
   }, [initGagupan]);
 
-  // Auto-start next round after 10 seconds if user is idle in result phase
-  useEffect(() => {
-    if (gamePhase === 'RESULT') {
-      const timer = setTimeout(() => nextRound(), 10000);
-      return () => clearTimeout(timer);
-    }
-  }, [gamePhase, nextRound]);
+
 
   const getScoreLabel = (score: number) => {
     if (score === 9) return '갑오(9)';
@@ -112,6 +118,15 @@ export default function GagupanBoard() {
             </span>
           </div>
         </div>
+        <button
+          onClick={toggleMute}
+          className="status-bar-back mr-1.5"
+          aria-label={isMuted ? "소리 켜기" : "소리 끄기"}
+          style={{ fontSize: '0.9rem' }}
+        >
+          {isMuted ? '🔇' : '🔊'}
+        </button>
+
         <button
           onClick={() => setShowRuleHelper(true)}
           className="status-bar-back"
@@ -313,7 +328,7 @@ export default function GagupanBoard() {
       </div>
 
       {/* ── Betting & Action Dock ── */}
-      <div className="w-full flex flex-col items-center bg-black/60 backdrop-blur-md pt-3 pb-safe-bottom border-t border-white/5 z-20">
+      <div className="w-full flex flex-col items-center bg-black/60 backdrop-blur-md pt-3 pb-[calc(24px+env(safe-area-inset-bottom))] border-t border-white/5 z-20">
         {gamePhase === 'BETTING' && (
           <div className="w-full max-w-md px-4 flex flex-col gap-3">
             {/* Chip selector */}

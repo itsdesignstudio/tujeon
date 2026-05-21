@@ -37,6 +37,8 @@ export interface Card {
 // Game Modes
 // ============================================================
 
+export type Difficulty = 'EASY' | 'MEDIUM' | 'HARD';
+
 export type GameMode = 'DOLRYEO_DAEGI' | 'GAGU' | 'SUTUJEON' | 'GAGUPAN';
 
 export const GAME_MODE_INFO: Record<GameMode, { label: string; description: string; available: boolean }> = {
@@ -139,6 +141,10 @@ export interface GameState {
   winnerId: string | null;
   roundNumber: number;
   betAmount: number;
+  currentRoundBet: number;
+  difficulty: Difficulty;
+  timeLeft: number | null;
+  isTimerRunning: boolean;
 
   // ── Actions ──
   initGame: (mode: GameMode, playerCount: number) => void;
@@ -149,6 +155,13 @@ export interface GameState {
   evaluateHands: () => void;
   nextRound: () => void;
   resetGame: () => void;
+  setBetAmount: (amount: number) => void;
+  restartGame: () => void;
+  setDifficulty: (difficulty: Difficulty) => void;
+  startTimer: (initialSeconds: number) => void;
+  tickTimer: () => void;
+  stopTimer: () => void;
+  handleTimeout: () => void;
 }
 
 // ============================================================
@@ -163,6 +176,7 @@ export interface GaguPlayerState {
   cards: Card[];
   score: number;       // Current modulo 10 score
   hasStood: boolean;   // Stand status
+  chips: number;       // Current chip balance
 }
 
 export interface GaguState {
@@ -173,6 +187,7 @@ export interface GaguState {
   winnerId: string | 'DRAW' | null;
   roundNumber: number;
   betAmount: number;
+  currentRoundBet: number;
 
   // Actions
   initGagu: () => void;
@@ -183,6 +198,8 @@ export interface GaguState {
   evaluateGagu: () => void;
   nextRound: () => void;
   resetGagu: () => void;
+  setBetAmount: (amount: number) => void;
+  restartGagu: () => void;
 }
 
 // ============================================================

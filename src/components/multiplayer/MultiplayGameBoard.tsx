@@ -38,7 +38,7 @@ export default function MultiplayGameBoard() {
   }, [publicPlayers, myId]);
 
   const [selectedCardIds, setSelectedCardIds] = useState<string[]>([]);
-  const [isHwangModalOpen, setIsHwangModalOpen] = useState(false);
+  const [isHwangConfirmOpen, setIsHwangConfirmOpen] = useState(false);
   const [showRuleHelper, setShowRuleHelper] = useState(false);
 
   const parsedCards = useMemo(() => {
@@ -82,7 +82,7 @@ export default function MultiplayGameBoard() {
   const handleConfirmHwang = useCallback(async () => {
     if (!myId) return;
     await updateGameState({ [`confirmed_${myId}`]: 'HWANG' } as any);
-    setIsHwangModalOpen(false);
+    setIsHwangConfirmOpen(false);
   }, [myId, updateGameState]);
 
   // scheduledBotsRef to prevent redundant setTimeout loops
@@ -290,7 +290,7 @@ export default function MultiplayGameBoard() {
         </div>
 
         {isShowdown && sortedOpponentCards.length > 0 && (
-          <div className="flex flex-col gap-1.5 mt-1 border-t border-[rgba(200,169,110,0.1)] pt-2 items-center">
+          <div className="flex flex-col gap-2.5 mt-3.5 border-t border-[rgba(200,169,110,0.1)] pt-3 items-center">
             <div className="flex items-center gap-0.5 justify-center">
               {sortedOpponentCards.map((card, idx) => {
                 const isHouseCard = confirmedCardIds.includes(card.id);
@@ -417,7 +417,7 @@ export default function MultiplayGameBoard() {
       {/* ── My Hand (bottom) ── */}
       <div className="px-3 sm:px-6 pb-3 relative z-10">
         {myInfo && (
-          <div className="ink-panel px-3 py-1.5 flex items-center gap-2 mb-2 justify-center">
+          <div className="ink-panel px-3 py-1.5 flex items-center gap-2 mb-6 justify-center">
             <div
               className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold"
               style={{
@@ -464,23 +464,56 @@ export default function MultiplayGameBoard() {
       {/* ── Action Dock ── */}
       {(phase === 'MAKE_COMBINATION' || phase === 'SHOWDOWN') && (
         <div className="action-dock">
-          <Button
-            onClick={handleConfirm}
-            disabled={phase === 'SHOWDOWN' || !canConfirm}
-            size="md"
-            className="flex-1 max-w-[200px]"
-          >
-            {phase === 'SHOWDOWN' ? '패 공개 중...' : '집 짓기 확인'}
-          </Button>
-          <Button
-            onClick={() => setIsHwangModalOpen(true)}
-            disabled={phase === 'SHOWDOWN'}
-            variant="danger"
-            size="md"
-            className="max-w-[140px]"
-          >
-            황 선언
-          </Button>
+          {isHwangConfirmOpen ? (
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-2 sm:gap-4 py-2.5 px-4 bg-red-950/80 border border-red-800/40 rounded-xl animate-fade-in w-full max-w-[420px] mx-auto shadow-[0_4px_25px_rgba(0,0,0,0.6)]">
+              <div className="flex flex-col items-center sm:items-start text-center sm:text-left">
+                <span className="text-xs sm:text-sm font-bold text-red-200" style={{ fontFamily: 'var(--font-serif)' }}>
+                  ⚠️ 정말 황(黃)을 선언하시겠습니까?
+                </span>
+                <span className="text-[10px] text-red-400 mt-0.5">
+                  황을 선언하면 이번 라운드는 즉시 패배합니다.
+                </span>
+              </div>
+              <div className="flex gap-2 shrink-0">
+                <Button
+                  onClick={handleConfirmHwang}
+                  variant="danger"
+                  size="sm"
+                  className="px-4 py-1.5 font-bold text-xs"
+                >
+                  선언 확정
+                </Button>
+                <Button
+                  onClick={() => setIsHwangConfirmOpen(false)}
+                  variant="secondary"
+                  size="sm"
+                  className="px-4 py-1.5 font-bold text-xs"
+                >
+                  취소
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <>
+              <Button
+                onClick={handleConfirm}
+                disabled={phase === 'SHOWDOWN' || !canConfirm}
+                size="md"
+                className="flex-1 max-w-[200px]"
+              >
+                {phase === 'SHOWDOWN' ? '패 공개 중...' : '집 짓기 확인'}
+              </Button>
+              <Button
+                onClick={() => setIsHwangConfirmOpen(true)}
+                disabled={phase === 'SHOWDOWN'}
+                variant="danger"
+                size="md"
+                className="max-w-[140px]"
+              >
+                황 선언
+              </Button>
+            </>
+          )}
         </div>
       )}
 
@@ -494,19 +527,9 @@ export default function MultiplayGameBoard() {
       )}
 
       {/* Spacer for action dock - stable and permanent */}
-      <div style={{ height: 'calc(52px + env(safe-area-inset-bottom))' }} />
+      <div style={{ height: 'calc(68px + env(safe-area-inset-bottom))' }} />
 
-      {/* Hwang Modal */}
-      <Modal isOpen={isHwangModalOpen} onClose={() => setIsHwangModalOpen(false)} title="황 선언" bottomSheet>
-        <p className="mb-5 text-sm" style={{ color: 'var(--tujeon-cream)' }}>
-          정말 10의 배수를 만들 수 있는 조합이 없습니까?<br />
-          <span style={{ color: 'var(--tujeon-red-light)' }}>황을 선언하면 이번 라운드에서 패배합니다.</span>
-        </p>
-        <div className="flex gap-3 justify-end">
-          <Button variant="secondary" onClick={() => setIsHwangModalOpen(false)}>취소</Button>
-          <Button variant="danger" onClick={handleConfirmHwang}>선언하기</Button>
-        </div>
-      </Modal>
+
 
       <RuleHelper isOpen={showRuleHelper} onClose={() => setShowRuleHelper(false)} />
     </div>

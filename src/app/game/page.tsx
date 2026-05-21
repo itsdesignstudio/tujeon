@@ -11,6 +11,7 @@ import GameBoard from '@/components/game/GameBoard';
 import GaguBoard from '@/components/game/GaguBoard';
 import SutujeonBoard from '@/components/game/SutujeonBoard';
 import GagupanBoard from '@/components/game/GagupanBoard';
+import { GameTimerController } from '@/components/game/GameTimerController';
 
 const MultiplayGameWrapper = dynamic(() => import('@/components/multiplayer/MultiplayGameWrapper'), {
   ssr: false,
@@ -62,7 +63,7 @@ function GameContent() {
       // Gagupan waits for player bets, no auto-deal here
       return;
     } else {
-      if (players.length > 0 && gamePhase === 'LOBBY') {
+      if (gamePhase === 'LOBBY' && players.length > 0) {
         const timer = setTimeout(() => dealCards(), 500);
         return () => clearTimeout(timer);
       }
@@ -97,10 +98,15 @@ function GameContent() {
   }
 
   // Each board now contains its own status bar with back button
-  if (mode === 'GAGU') return <GaguBoard />;
-  if (mode === 'SUTUJEON') return <SutujeonBoard />;
-  if (mode === 'GAGUPAN') return <GagupanBoard />;
-  return <GameBoard />;
+  return (
+    <>
+      <GameTimerController />
+      {mode === 'GAGU' && <GaguBoard />}
+      {mode === 'SUTUJEON' && <SutujeonBoard />}
+      {mode === 'GAGUPAN' && <GagupanBoard />}
+      {mode === 'DOLRYEO_DAEGI' && <GameBoard />}
+    </>
+  );
 }
 
 function LoadingScreen({ text }: { text: string }) {

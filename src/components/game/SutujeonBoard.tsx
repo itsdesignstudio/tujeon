@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { useSutujeonStore } from '@/logic/useSutujeonStore';
 import { Card, SUIT_INFO } from '@/types/game';
 import { evaluateTrickWinner } from '@/logic/engine/sutujeon';
@@ -10,6 +10,7 @@ import Button from '@/components/ui/Button';
 import VictoryEffect from '@/components/ui/VictoryEffect';
 import Modal from '@/components/ui/Modal';
 import { useRouter } from 'next/navigation';
+import { gameAudio } from '@/lib/audio';
 
 type SortMethod = 'SUIT' | 'RANK';
 
@@ -30,6 +31,17 @@ export default function SutujeonBoard() {
   const [sortMethod, setSortMethod] = useState<SortMethod>('SUIT');
   const [showRuleHelper, setShowRuleHelper] = useState(false);
   const [showResult, setShowResult] = useState(false);
+
+  // Mute preference state tracking
+  const [isMuted, setIsMuted] = useState(false);
+  useEffect(() => {
+    setIsMuted(gameAudio.getMuted());
+  }, []);
+
+  const toggleMute = useCallback(() => {
+    const nextMute = gameAudio.toggleMute();
+    setIsMuted(nextMute);
+  }, []);
 
   const humanPlayer = players[0];
   const botLeft = players[1];
@@ -83,6 +95,15 @@ export default function SutujeonBoard() {
   const handleCardClick = (card: Card) => {
     if (canPlay(card)) playCard(humanPlayer.id, card.id);
   };
+
+  // Play a sound whenever anyone (human or bot) plays a card into the center trick area
+  const prevActionsLength = useRef(currentTrick.actions.length);
+  useEffect(() => {
+    if (currentTrick.actions.length > prevActionsLength.current) {
+      gameAudio.playCardPlay();
+    }
+    prevActionsLength.current = currentTrick.actions.length;
+  }, [currentTrick.actions.length]);
 
   // Auto restart
   useEffect(() => {
@@ -174,6 +195,14 @@ export default function SutujeonBoard() {
           <span className="text-[10px]" style={{ color: isMyTurn ? 'var(--tujeon-gold-light)' : 'var(--tujeon-cream-dim)' }}>
             {isMyTurn ? '🎯 내 턴' : `${players[currentPlayerIndex]?.name ?? '...'}`}
           </span>
+          <button
+            onClick={toggleMute}
+            className="status-bar-back mr-0.5"
+            aria-label={isMuted ? "소리 켜기" : "소리 끄기"}
+            style={{ fontSize: '0.9rem' }}
+          >
+            {isMuted ? '🔇' : '🔊'}
+          </button>
           <button
             onClick={() => setShowRuleHelper(true)}
             className="status-bar-back"
@@ -268,7 +297,7 @@ export default function SutujeonBoard() {
       </div>
 
       {/* ── My Hand (bottom) ── */}
-      <div className="px-2 pb-[calc(28px+env(safe-area-inset-bottom))] flex flex-col items-center z-10 w-full max-w-4xl mx-auto">
+      <div className="px-2 pb-[calc(38px+env(safe-area-inset-bottom))] flex flex-col items-center z-10 w-full max-w-4xl mx-auto">
         {/* Info row */}
         <div className="flex justify-between items-center w-full mb-1.5 px-1 sm:px-2">
           <div className="flex items-center gap-2">

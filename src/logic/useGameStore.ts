@@ -3,7 +3,7 @@
 // ============================================================
 
 import { create } from 'zustand';
-import { GameState, GameMode, Player, Card, GamePhase } from '@/types/game';
+import { GameState, GameMode, Player, Card, GamePhase, Difficulty } from '@/types/game';
 import { createDeck, shuffleDeck, dealFromDeck } from '@/data/deck';
 import {
   evaluateDolryeodaegiHand,
@@ -36,7 +36,8 @@ function createPlayer(
 
 const INITIAL_STATE: Omit<GameState, 
   'initGame' | 'dealCards' | 'toggleCardSelection' | 'confirmCombination' | 
-  'evaluateHands' | 'declareHwang' | 'nextRound' | 'resetGame'
+  'evaluateHands' | 'declareHwang' | 'nextRound' | 'resetGame' | 'setBetAmount' | 'restartGame' |
+  'setDifficulty' | 'startTimer' | 'tickTimer' | 'stopTimer' | 'handleTimeout'
 > = {
   gameMode: 'DOLRYEO_DAEGI',
   deck: [],
@@ -47,6 +48,10 @@ const INITIAL_STATE: Omit<GameState,
   winnerId: null,
   roundNumber: 0,
   betAmount: 100,
+  currentRoundBet: 100,
+  difficulty: 'EASY',
+  timeLeft: null,
+  isTimerRunning: false,
 };
 
 // ── Store ──
@@ -90,6 +95,9 @@ export const useGameStore = create<GameState>((set, get) => ({
     const { players, betAmount } = get();
     let deck = shuffleDeck(createDeck());
 
+    // 딜을 돌리는 시점의 최신 betAmount를 이 라운드의 실질 판돈(currentRoundBet)으로 기록
+    const currentRoundBet = betAmount;
+
     const updatedPlayers = players.map((player) => {
       const { dealt, remaining } = dealFromDeck(deck, 5);
       deck = remaining;
@@ -99,7 +107,7 @@ export const useGameStore = create<GameState>((set, get) => ({
         selectedCardIds: [],
         isFolded: false,
         evaluation: null,
-        score: player.score - betAmount, // Ante deduction
+        score: player.score - currentRoundBet, // Ante deduction (실질 판돈 차감)
       };
     });
 
@@ -109,6 +117,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       gamePhase: 'MAKE_COMBINATION',
       winnerId: null,
       roundNumber: get().roundNumber + 1,
+      currentRoundBet, // 스토어에 보존
     });
   },
 
@@ -284,7 +293,7 @@ export const useGameStore = create<GameState>((set, get) => ({
    * Transitions: SHOWDOWN → RESULT
    */
   evaluateHands: () => {
-    const { players, betAmount } = get();
+    const { players, currentRoundBet } = get();
 
     // Find the player with the best hand
     let bestIdx = 0;
@@ -303,12 +312,12 @@ export const useGameStore = create<GameState>((set, get) => ({
       }
     }
 
-    const pot = betAmount * players.length;
+    const pot = currentRoundBet * players.length;
     let winnerId = isDraw ? 'DRAW' : players[bestIdx].id;
 
     // Award pot to winner
     const updatedPlayers = players.map((p) => {
-      if (isDraw) return { ...p, score: p.score + betAmount }; // Return bets on draw
+      if (isDraw) return { ...p, score: p.score + currentRoundBet }; // Return bets on draw
       return p.id === winnerId ? { ...p, score: p.score + pot } : p;
     });
 
@@ -339,5 +348,104 @@ export const useGameStore = create<GameState>((set, get) => ({
       ...INITIAL_STATE,
       players: [],
     });
+  },
+
+  /**
+   * Change the bet amount.
+   */
+  setBetAmount: (amount: number) => {
+    const state = get();
+    const { gamePhase, players, currentRoundBet } = state;
+
+    // "첫 집 짓기 / 황을 하기 전" 상태 판별:
+    // MAKE_COMBINATION 단계이고, humanPlayer(나)의 evaluation이 아직 null인 상태
+    const humanPlayer = players.find((p) => !p.isBot);
+    const isBeforeConfirm =
+      gamePhase === 'MAKE_COMBINATION' && humanPlayer && !humanPlayer.evaluation;
+
+    if (isBeforeConfirm) {
+      // 실시간으로 차감된 점수를 보정하며 판돈을 즉시 갱신
+      const updatedPlayers = players.map((p) => ({
+        ...p,
+        // 기존에 currentRoundBet만큼 차감되었던 것을 돌려주고, 새로운 amount만큼 차감
+        score: p.score + currentRoundBet - amount,
+      }));
+
+      set({
+        betAmount: amount,
+        currentRoundBet: amount,
+        players: updatedPlayers,
+      });
+    } else {
+      // 일반적인 변경 (다음 판부터 적용)
+      set({ betAmount: amount });
+    }
+  },
+
+  /**
+   * Reset players' score to 1000, set round back to 0, and immediately start a new game round.
+   */
+  restartGame: () => {
+    const { players } = get();
+    const resetPlayers = players.map((p) => ({
+      ...p,
+      score: 1000,
+      cards: [],
+      selectedCardIds: [],
+      isFolded: false,
+      evaluation: null,
+    }));
+
+    set({
+      players: resetPlayers,
+      roundNumber: 0,
+      winnerId: null,
+      gamePhase: 'LOBBY',
+    });
+
+    get().dealCards();
+  },
+
+  setDifficulty: (difficulty: Difficulty) => set({ difficulty }),
+
+  startTimer: (initialSeconds: number) => {
+    set({ timeLeft: initialSeconds, isTimerRunning: true });
+  },
+
+  stopTimer: () => set({ timeLeft: null, isTimerRunning: false }),
+
+  tickTimer: () => {
+    const { timeLeft, isTimerRunning, handleTimeout } = get();
+    if (!isTimerRunning || timeLeft === null) return;
+
+    if (timeLeft <= 1) {
+      get().stopTimer();
+      handleTimeout();
+    } else {
+      set({ timeLeft: timeLeft - 1 });
+    }
+  },
+
+  handleTimeout: () => {
+    const { gameMode, gamePhase, declareHwang } = get();
+
+    if (gameMode === 'DOLRYEO_DAEGI' && gamePhase === 'MAKE_COMBINATION') {
+      console.log("시간 초과! 자동으로 '황' 처리됩니다.");
+      declareHwang('player-0');
+    }
+
+    if (gameMode === 'GAGU') {
+      // dynamic import for gagu store to prevent circular reference
+      try {
+        const { useGaguStore } = require('./useGaguStore');
+        const gaguState = useGaguStore.getState();
+        if (gaguState.gamePhase === 'PLAYER_ACTION') {
+          console.log("시간 초과! 자동으로 'Stand' 처리됩니다.");
+          gaguState.stand();
+        }
+      } catch (err) {
+        console.error('Error handling Gagu timeout:', err);
+      }
+    }
   },
 }));

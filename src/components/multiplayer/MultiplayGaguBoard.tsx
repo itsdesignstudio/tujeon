@@ -57,12 +57,7 @@ export default function MultiplayGaguBoard() {
     }
   }, [isHost, phase, evaluateGaguShowdown]);
 
-  React.useEffect(() => {
-    if (isHost && phase === 'RESULT') {
-      const timer = setTimeout(() => startNextRound(), 10000);
-      return () => clearTimeout(timer);
-    }
-  }, [isHost, phase, startNextRound]);
+
 
   const isShowdown = phase === 'SHOWDOWN' || phase === 'RESULT';
 
@@ -224,12 +219,11 @@ export default function MultiplayGaguBoard() {
       {phase === 'RESULT' && isHost && (
         <div className="action-dock">
           <Button onClick={() => startNextRound()} size="md" className="flex-1 max-w-[180px]">다음 판</Button>
-          <span className="text-[10px]" style={{ color: 'var(--tujeon-cream-dim)' }}>(10초 후 자동 시작)</span>
         </div>
       )}
 
       {/* Spacer for action dock - stable and permanent */}
-      <div style={{ height: 'calc(52px + env(safe-area-inset-bottom))' }} />
+      <div style={{ height: 'calc(68px + env(safe-area-inset-bottom))' }} />
 
       <GaguRuleHelper isOpen={showRuleHelper} onClose={() => setShowRuleHelper(false)} />
     </div>

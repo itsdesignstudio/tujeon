@@ -3,7 +3,10 @@ import { GaguState, Card } from '@/types/game';
 import { createDeck, shuffleDeck, dealFromDeck } from '@/data/deck';
 import { calculateGaguScore, determineDealerAction, determineGaguWinner } from './engine/gagu';
 
-const INITIAL_STATE: Omit<GaguState, 'initGagu' | 'dealCards' | 'hit' | 'stand' | 'executeDealerTurn' | 'evaluateGagu' | 'nextRound' | 'resetGagu'> = {
+const INITIAL_STATE: Omit<GaguState, 
+  'initGagu' | 'dealCards' | 'hit' | 'stand' | 'executeDealerTurn' | 
+  'evaluateGagu' | 'nextRound' | 'resetGagu' | 'setBetAmount' | 'restartGagu'
+> = {
   deck: [],
   player: null,
   dealer: null,
@@ -11,6 +14,7 @@ const INITIAL_STATE: Omit<GaguState, 'initGagu' | 'dealCards' | 'hit' | 'stand' 
   winnerId: null,
   roundNumber: 0,
   betAmount: 100,
+  currentRoundBet: 100,
 };
 
 export const useGaguStore = create<GaguState>((set, get) => ({
@@ -21,12 +25,35 @@ export const useGaguStore = create<GaguState>((set, get) => ({
       ...INITIAL_STATE,
       gamePhase: 'INIT',
       roundNumber: 0,
+      player: {
+        id: 'player-0',
+        isDealer: false,
+        cards: [],
+        score: 0,
+        hasStood: false,
+        chips: 1000,
+      },
+      dealer: {
+        id: 'dealer',
+        isDealer: true,
+        cards: [],
+        score: 0,
+        hasStood: false,
+        chips: 1000,
+      },
     });
   },
 
   dealCards: () => {
-    const { betAmount } = get();
+    const { betAmount, player, dealer } = get();
+    
+    // Check if players have enough chips
+    const currentChipsPlayer = player?.chips ?? 1000;
+    const currentChipsDealer = dealer?.chips ?? 1000;
+    if (currentChipsPlayer <= 0 || currentChipsDealer <= 0) return;
+
     let deck = shuffleDeck(createDeck());
+    const currentRoundBet = betAmount;
 
     // Deal 2 cards to player, 2 cards to dealer
     const playerDeal = dealFromDeck(deck, 2);
@@ -43,6 +70,7 @@ export const useGaguStore = create<GaguState>((set, get) => ({
         cards: playerDeal.dealt,
         score: calculateGaguScore(playerDeal.dealt),
         hasStood: false,
+        chips: currentChipsPlayer - currentRoundBet,
       },
       dealer: {
         id: 'dealer',
@@ -50,10 +78,12 @@ export const useGaguStore = create<GaguState>((set, get) => ({
         cards: dealerDeal.dealt,
         score: calculateGaguScore(dealerDeal.dealt),
         hasStood: false,
+        chips: currentChipsDealer - currentRoundBet,
       },
       gamePhase: 'PLAYER_ACTION',
       winnerId: null,
       roundNumber: get().roundNumber + 1,
+      currentRoundBet,
     });
   },
 
@@ -131,13 +161,30 @@ export const useGaguStore = create<GaguState>((set, get) => ({
   },
 
   evaluateGagu: () => {
-    const { player, dealer, gamePhase } = get();
+    const { player, dealer, gamePhase, currentRoundBet } = get();
     if (gamePhase !== 'SHOWDOWN' || !player || !dealer) return;
 
     const winner = determineGaguWinner(player.score, dealer.score);
     
+    let updatedPlayerChips = player.chips;
+    let updatedDealerChips = dealer.chips;
+
+    const pot = currentRoundBet * 2;
+
+    if (winner === 'PLAYER') {
+      updatedPlayerChips += pot;
+    } else if (winner === 'DEALER') {
+      updatedDealerChips += pot;
+    } else {
+      // Draw: return bets
+      updatedPlayerChips += currentRoundBet;
+      updatedDealerChips += currentRoundBet;
+    }
+
     set({
       winnerId: winner === 'DRAW' ? 'DRAW' : (winner === 'PLAYER' ? player.id : dealer.id),
+      player: { ...player, chips: updatedPlayerChips },
+      dealer: { ...dealer, chips: updatedDealerChips },
       gamePhase: 'RESULT',
     });
   },
@@ -148,5 +195,61 @@ export const useGaguStore = create<GaguState>((set, get) => ({
 
   resetGagu: () => {
     set({ ...INITIAL_STATE });
+  },
+
+  setBetAmount: (amount: number) => {
+    const { gamePhase, player, dealer, currentRoundBet } = get();
+    if (!player || !dealer) return;
+
+    // Check if it's before any action (first PLAYER_ACTION with 2 cards and not stood)
+    const isBeforeAction = 
+      gamePhase === 'PLAYER_ACTION' && 
+      player.cards.length === 2 && 
+      !player.hasStood;
+
+    if (isBeforeAction) {
+      // Adjust current chip balances in real-time
+      set({
+        betAmount: amount,
+        currentRoundBet: amount,
+        player: {
+          ...player,
+          chips: player.chips + currentRoundBet - amount,
+        },
+        dealer: {
+          ...dealer,
+          chips: dealer.chips + currentRoundBet - amount,
+        },
+      });
+    } else {
+      // Standard change for the next round
+      set({ betAmount: amount });
+    }
+  },
+
+  restartGagu: () => {
+    set({
+      player: {
+        id: 'player-0',
+        isDealer: false,
+        cards: [],
+        score: 0,
+        hasStood: false,
+        chips: 1000,
+      },
+      dealer: {
+        id: 'dealer',
+        isDealer: true,
+        cards: [],
+        score: 0,
+        hasStood: false,
+        chips: 1000,
+      },
+      roundNumber: 0,
+      winnerId: null,
+      gamePhase: 'INIT',
+    });
+
+    get().dealCards();
   },
 }));

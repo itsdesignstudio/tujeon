@@ -80,12 +80,7 @@ export default function MultiplayGagupanBoard() {
   const isBanker = myId === actualHostId;
 
   // Auto-start next round after 12 seconds for Host
-  useEffect(() => {
-    if (isHost && phase === 'RESULT') {
-      const timer = setTimeout(() => startNextRound(), 12000);
-      return () => clearTimeout(timer);
-    }
-  }, [isHost, phase, startNextRound]);
+
 
   const getScoreLabel = (score: number) => {
     if (score === 9) return '갑오(9)';
@@ -428,9 +423,7 @@ export default function MultiplayGagupanBoard() {
             <span className="text-base text-yellow-300 font-extrabold animate-pulse">
               정산 결과: {netGain > 0 ? `+${netGain.toLocaleString()} 냥 획득!` : netGain < 0 ? `${netGain.toLocaleString()} 냥 상실` : '무승부 (변동 없음)'}
             </span>
-            {isHost && (
-              <span className="text-[9px] text-white/40 mt-0.5">(12초 후 다음 판 자동 시작)</span>
-            )}
+
           </div>
         )}
       </div>
