@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { useGameStore } from '@/logic/useGameStore';
@@ -27,6 +27,13 @@ export default function Home() {
   const [showTutorial, setShowTutorial] = useState(false);
   const [selectedMode, setSelectedMode] = useState<GameMode>('DOLRYEO_DAEGI');
   const [showMultiplay, setShowMultiplay] = useState(false);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('join')) {
+      setShowMultiplay(true);
+    }
+  }, []);
 
   const handleStartGame = useCallback(async () => {
     gameAudio.playCardPlay();

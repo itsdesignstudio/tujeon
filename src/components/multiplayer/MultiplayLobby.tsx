@@ -1,6 +1,4 @@
-'use client';
-
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMultiplayStore, RoomConfig } from '@/logic/useMultiplayStore';
 import { getFirebaseDb } from '@/lib/firebase';
@@ -10,6 +8,8 @@ import { GAME_MODE_INFO, GameMode } from '@/types/game';
 import Button from '@/components/ui/Button';
 import PlayerList from './PlayerList';
 import { getErrorMessage } from '@/lib/error';
+import Modal from '@/components/ui/Modal';
+import { QRCodeSVG } from 'qrcode.react';
 
 type LobbyStep = 'MENU' | 'CREATE' | 'JOIN' | 'MATCHING' | 'WAITING';
 
@@ -45,6 +45,69 @@ export default function MultiplayLobby({ onBack }: MultiplayLobbyProps = {}) {
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
 
+  const [showQrModal, setShowQrModal] = useState(false);
+  const [shareCopied, setShareCopied] = useState(false);
+  const [isJoinCodeFromUrl, setIsJoinCodeFromUrl] = useState(false);
+
+  // Load saved name and handle automatic URL parameter join on mount
+  useEffect(() => {
+    const savedName = localStorage.getItem('tujeon_player_name');
+    if (savedName) {
+      setPlayerName(savedName);
+    }
+
+    const params = new URLSearchParams(window.location.search);
+    const urlJoinCode = params.get('join');
+    if (urlJoinCode) {
+      const formattedCode = urlJoinCode.trim().toUpperCase();
+      setJoinCode(formattedCode);
+      setIsJoinCodeFromUrl(true);
+
+      if (savedName) {
+        setLoading(true);
+        setError('');
+        joinRoom(formattedCode, savedName)
+          .then(() => {
+            setStep('WAITING');
+          })
+          .catch((e) => {
+            setError(getErrorMessage(e, '방 입장에 실패했습니다.'));
+            setStep('JOIN');
+          })
+          .finally(() => {
+            setLoading(false);
+          });
+      } else {
+        setStep('JOIN');
+      }
+    }
+  }, [joinRoom]);
+
+  // Share invite link using Native Share API or Clipboard fallback
+  const handleShareLink = useCallback(async () => {
+    if (!roomId) return;
+    const url = `${window.location.origin}?join=${roomId}`;
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: '투전 멀티플레이 초대',
+          text: `투전 멀티플레이 방(${roomId})에 당신을 초대합니다! 패를 나누어 승부를 겨뤄보세요.`,
+          url,
+        });
+      } catch (err) {
+        console.error('Sharing failed', err);
+      }
+    } else {
+      try {
+        await navigator.clipboard.writeText(url);
+        setShareCopied(true);
+        setTimeout(() => setShareCopied(false), 3000);
+      } catch (err) {
+        console.error('Copy link failed', err);
+      }
+    }
+  }, [roomId]);
+
   // ── Create Room ──
   const handleCreateRoom = useCallback(async () => {
     const finalName = playerName.trim() || '익명의 투전자';
@@ -57,6 +120,10 @@ export default function MultiplayLobby({ onBack }: MultiplayLobbyProps = {}) {
       };
       const newRoomId = await createRoom(config, finalName);
       setStep('WAITING');
+      
+      if (playerName.trim()) {
+        localStorage.setItem('tujeon_player_name', playerName.trim());
+      }
       
       // Auto-copy the room code
       try {
@@ -86,6 +153,10 @@ export default function MultiplayLobby({ onBack }: MultiplayLobbyProps = {}) {
       const formattedCode = joinCode.trim().toUpperCase();
       await joinRoom(formattedCode, finalName);
       setStep('WAITING');
+
+      if (playerName.trim()) {
+        localStorage.setItem('tujeon_player_name', playerName.trim());
+      }
     } catch (e: any) {
       setError(getErrorMessage(e, '방 입장에 실패했습니다.'));
     } finally {
@@ -395,9 +466,17 @@ export default function MultiplayLobby({ onBack }: MultiplayLobbyProps = {}) {
                 onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
                 placeholder="방 코드를 입력하세요"
                 maxLength={6}
-                className="ink-panel px-4 py-3 text-sm bg-transparent outline-none font-mono tracking-widest uppercase w-full text-center"
+                disabled={isJoinCodeFromUrl}
+                className={`ink-panel px-4 py-3 text-sm bg-transparent outline-none font-mono tracking-widest uppercase w-full text-center ${
+                  isJoinCodeFromUrl ? 'opacity-50 cursor-not-allowed border-dashed' : ''
+                }`}
                 style={{ color: 'var(--tujeon-cream)', borderColor: 'rgba(200,169,110,0.15)' }}
               />
+              {isJoinCodeFromUrl && (
+                <p className="text-[10px] text-center animate-pulse" style={{ color: 'var(--tujeon-gold-dim)' }}>
+                  초대 링크를 통해 자동으로 입력된 방 코드입니다.
+                </p>
+              )}
             </div>
 
             {error && (
@@ -494,6 +573,24 @@ export default function MultiplayLobby({ onBack }: MultiplayLobbyProps = {}) {
               <div className="text-[10px] mt-1.5 transition-colors" style={{ color: copied ? '#4ade80' : 'var(--tujeon-cream-dim)' }}>
                 {copied ? '방 코드가 복사되었습니다!' : '이 코드를 상대방에게 전달하세요'}
               </div>
+
+              <div className="w-full h-px my-3" style={{ background: 'rgba(200, 169, 110, 0.12)' }} />
+              <button
+                onClick={() => {
+                  setShowQrModal(true);
+                  setShareCopied(false);
+                }}
+                className="text-xs font-bold py-1.5 px-4 rounded-lg transition-all duration-200 cursor-pointer active:scale-95 flex items-center justify-center gap-1.5 mx-auto hover:bg-yellow-600/10"
+                style={{
+                  fontFamily: 'var(--font-serif)',
+                  border: '1px solid rgba(200, 169, 110, 0.25)',
+                  background: 'rgba(200, 169, 110, 0.06)',
+                  color: 'var(--tujeon-gold-light)',
+                }}
+              >
+                <span>📱</span>
+                <span>QR / 링크로 초대</span>
+              </button>
             </div>
 
             {/* Game mode info */}
@@ -542,6 +639,64 @@ export default function MultiplayLobby({ onBack }: MultiplayLobbyProps = {}) {
           </div>
         )}
       </div>
+
+      {/* QR Code & Link Invitation Modal */}
+      <Modal
+        isOpen={showQrModal}
+        onClose={() => setShowQrModal(false)}
+        title="방 초대 QR 코드"
+      >
+        <div className="flex flex-col items-center gap-6 py-2">
+          {/* High contrast white background QR container matching the premium traditional theme */}
+          <div
+            className="p-4 rounded-xl border flex items-center justify-center"
+            style={{
+              background: '#ffffff',
+              borderColor: 'rgba(200, 169, 110, 0.3)',
+              boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+            }}
+          >
+            <QRCodeSVG
+              value={roomId ? `${window.location.origin}?join=${roomId}` : ''}
+              size={200}
+              bgColor="#ffffff"
+              fgColor="#0d0b09"
+              level="M"
+              includeMargin={false}
+            />
+          </div>
+
+          <div className="text-center w-full">
+            <div
+              className="text-lg font-mono font-bold tracking-[0.2em] mb-1.5"
+              style={{ color: 'var(--tujeon-gold-light)' }}
+            >
+              방 코드: {roomId}
+            </div>
+            <p
+              className="text-xs leading-relaxed max-w-[280px] mx-auto opacity-75"
+              style={{ color: 'var(--tujeon-cream-dim)' }}
+            >
+              상대방 기기의 카메라로 이 QR 코드를 스캔하거나 초대 링크를 복사하여 전달해 주세요.
+            </p>
+          </div>
+
+          <div className="flex flex-col gap-2 w-full mt-2">
+            <Button size="md" onClick={handleShareLink} className="w-full flex items-center justify-center gap-2">
+              <span>🔗</span>
+              <span>{shareCopied ? '초대 링크 복사 완료!' : '초대 링크 공유 / 복사'}</span>
+            </Button>
+            {shareCopied && (
+              <p className="text-[10px] text-center animate-pulse" style={{ color: '#4ade80' }}>
+                초대 링크가 클립보드에 성공적으로 복사되었습니다.
+              </p>
+            )}
+            <Button variant="secondary" size="md" onClick={() => setShowQrModal(false)} className="w-full">
+              닫기
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
